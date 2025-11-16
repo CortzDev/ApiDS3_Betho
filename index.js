@@ -1,12 +1,3 @@
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; font-src 'self' https://apids3betho-production.up.railway.app; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;"
-  );
-  next();
-});
-
-
 require('dotenv').config();
 const express = require('express');
 const PDFDocument = require('pdfkit');
@@ -316,6 +307,7 @@ app.get('/', (req,res)=> res.sendFile(path.join(__dirname,'public','index.html')
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=> console.log('Servidor escuchando en http://localhost:'+PORT));
+
 
 
 
