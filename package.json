@@ -11,5 +11,13 @@
   "license": "ISC",
   "dependencies": {
     "express": "^5.1.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CortzDev/ApiDS3_Betho.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CortzDev/ApiDS3_Betho/issues"
+  },
+  "homepage": "https://github.com/CortzDev/ApiDS3_Betho#readme"
 }
