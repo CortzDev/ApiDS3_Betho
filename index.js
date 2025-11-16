@@ -15,7 +15,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname,'public')));
 
-const JWT_SECRET = process.env.JWT_SECRET || 'CAMBIA_JWT_SECRET';
+const JWT_SECRET = process.env.JWT_SECRET || '4895f550f7ec4edad9eca3ef9928e585032ff513c9ffd0da3701b112dc5da2e29eb43fbad17c9e1262a3ae5d8d6cf5f3e169c3885f51f2161d266975b7199e87';
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Load RSA keys if present
@@ -309,5 +309,6 @@ app.get('/', (req,res)=> res.sendFile(path.join(__dirname,'public','index.html')
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=> console.log('Servidor escuchando en http://localhost:'+PORT));
+
 
 
