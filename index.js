@@ -13,7 +13,7 @@ app.get("/", (req, res) => {
       <title>APIDS3_B - API Status</title>
       <style>
         body {
-          background-color: #111827;
+          background-color: #BA776A;
           color: #FFFFFF;
           font-family: Arial, Helvetica, sans-serif;
           display: flex;
@@ -76,3 +76,4 @@ app.post("/echo", (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor APIDS3_B escuchando en el puerto ${PORT}`);
 });
+
