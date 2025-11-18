@@ -1,33 +1,39 @@
-document.getElementById("btnLogin").addEventListener("click", login);
-document.getElementById("btnRegister").addEventListener("click", () => {
-  location.href = "/register.html";
-});
+document.addEventListener('DOMContentLoaded', () => {
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+  const msgEl = document.getElementById('msg');
+  const loginBtn = document.getElementById('loginBtn');
+  const registerBtn = document.getElementById('registerBtn');
 
-async function login() {
-  const email = document.getElementById("email").value;
-  const pass = document.getElementById("pass").value;
-  const msg = document.getElementById("msg");
+  loginBtn.addEventListener('click', async () => {
+    const email = emailInput.value;
+    const password = passwordInput.value;
 
-  msg.textContent = "";
+    try {
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const j = await res.json();
+      if(!j.ok){ 
+        msgEl.className='text-danger'; 
+        msgEl.innerText=j.error; 
+        return; 
+      }
 
-  try {
-    const res = await fetch("/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password: pass })
-    });
-
-    const j = await res.json();
-
-    if (!j.ok) {
-      msg.textContent = j.error;
-      return;
+      localStorage.setItem('token', j.token);
+      msgEl.className='text-success';
+      msgEl.innerText='Inicio de sesión exitoso';
+      setTimeout(()=>{ location.href='dashboard.html'; }, 1000);
+    } catch(err){
+      msgEl.className='text-danger';
+      msgEl.innerText='Error al iniciar sesión';
+      console.error(err);
     }
+  });
 
-    localStorage.setItem("token", j.token);
-    location.href = "/dashboard.html";
-  } catch (e) {
-    msg.textContent = "Error de conexión";
-  }
-}
+  registerBtn.addEventListener('click', () => {
+    location.href='index.html';
+  });
+});
