@@ -359,15 +359,4 @@ if (hasHttpsCert) {
   if (isProduction) console.warn('Advertencia: modo producción sin HTTPS. Usa un proxy (nginx, Cloudflare, Heroku) para TLS.');
 }
 
-// -------------------------------
-// RECOMENDACIONES DE DESPLIEGUE
-// -------------------------------
-// 1) Ejecuta detrás de un reverse proxy (nginx / cloudflare) que maneje TLS en producción.
-// 2) Usa variables de entorno: NODE_ENV=production, SESSION_SECRET fuerte, COOKIE_SECRET.
-// 3) Genera certificados válidos (Let's Encrypt) o coloca certs en ./keys/key.pem y cert.pem.
-// 4) Habilita TRUST_PROXY=true si estás detrás de un proxy que termina TLS.
-// 5) Mantén SMTP_PASS como password de aplicación (Gmail App Password) si usas Gmail.
 
-// -------------------------------
-// FIN
-// -------------------------------
