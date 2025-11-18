@@ -33,5 +33,8 @@
   "bugs": {
     "url": "https://github.com/CortzDev/ApiDS3_Betho/issues"
   },
-  "homepage": "https://github.com/CortzDev/ApiDS3_Betho#readme"
+  "homepage": "https://github.com/CortzDev/ApiDS3_Betho#readme",
+  "devDependencies": {
+    "tailwindcss": "^4.1.17"
+  }
 }
