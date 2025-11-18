@@ -1,7 +1,3 @@
-// ===============================
-// SERVIDOR COMPLETO CON SESIONES + BLOCKCHAIN
-// ===============================
-
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
@@ -191,7 +187,7 @@ app.post("/logout", (req,res)=>{
 });
 
 // ===============================
-// BLOCKCHAIN SIMULADO + PERSISTENCIA EN DB
+// BLOCKCHAIN + PERSISTENCIA EN DB
 // ===============================
 let cadena = [];
 
@@ -203,7 +199,6 @@ app.post("/crearBloque", sessionAuth, async (req,res)=>{
   const { nonce } = req.body;
   if(!nonce) return res.status(400).json({ ok:false,error:"Nonce requerido" });
 
-  // Crear bloque
   const prevHash = cadena.length===0 ? '0'.repeat(64) : cadena[cadena.length-1].hash;
   const bloque = {
     block_id: cadena.length+1,
@@ -215,7 +210,6 @@ app.post("/crearBloque", sessionAuth, async (req,res)=>{
   cadena.push(bloque);
 
   try {
-    // Guardar en DB
     await db.query(
       `INSERT INTO bloques (nonce, previous_hash, hash, valido) 
        VALUES ($1,$2,$3,$4)`,
@@ -228,7 +222,22 @@ app.post("/crearBloque", sessionAuth, async (req,res)=>{
   }
 });
 
-// Validar blockchain
+// ===============================
+// NUEVO ENDPOINT: OBTENER BLOQUES
+// ===============================
+app.get("/bloques", sessionAuth, async (req, res) => {
+  try {
+    const r = await db.query("SELECT * FROM bloques ORDER BY block_id ASC");
+    res.json({ ok: true, bloques: r.rows });
+  } catch (err) {
+    console.error("Error obteniendo bloques:", err);
+    res.status(500).json({ ok: false, error: "Error obteniendo bloques" });
+  }
+});
+
+// ===============================
+// VALIDAR BLOCKCHAIN
+// ===============================
 app.get("/validar", sessionAuth, (req,res)=>{
   for(let i=0;i<cadena.length;i++){
     const b = cadena[i];

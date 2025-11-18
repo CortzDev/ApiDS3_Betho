@@ -1,31 +1,37 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Blockchain</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="p-4">
-<div class="container">
-<h1>Dashboard Blockchain</h1>
-<button id="validarBtn" class="btn btn-primary mb-2">Validar y Crear Bloque</button>
-<button id="logoutBtn" class="btn btn-danger mb-2">Cerrar Sesión</button>
-<div id="msg" class="mb-3"></div>
-<table class="table table-bordered" id="tablaCadena">
-<thead>
-<tr><th>ID</th><th>Nonce</th><th>Previous Hash</th><th>Hash</th><th>Válido</th></tr>
-</thead>
-<tbody></tbody>
-</table>
-<script src="./js/dashboard.js"></script>
-</div>
+<body class="bg-light">
+  <div class="container mt-5">
+    <h1 class="mb-4">Blockchain Dashboard</h1>
+
+    <div class="mb-3">
+      <button id="validarBtn" class="btn btn-primary">Validar / Crear Bloque</button>
+      <button id="logoutBtn" class="btn btn-danger">Cerrar Sesión</button>
+      <p id="msg" class="mt-2"></p>
+    </div>
+
+    <table class="table table-striped table-bordered" id="tablaCadena">
+      <thead class="table-dark">
+        <tr>
+          <th>ID</th>
+          <th>Nonce</th>
+          <th>Hash Anterior</th>
+          <th>Hash</th>
+          <th>Válido</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Script externo -->
+  <script src="./js/dashboard.js"></script>
 </body>
 </html>
-
-
-
-</script>
-
-
-</body></html>
