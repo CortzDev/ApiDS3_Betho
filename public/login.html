@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login</title>
-
+<link rel="stylesheet" href="css/bootstrap.min.css">
 </head>
 <body class="p-4">
 <div class="container">
@@ -12,10 +12,10 @@
 <div id="msg" class="mb-3"></div>
 <form id="loginForm">
   <div class="mb-3">
-    <input type="email" id="email" class="form-control" placeholder="Email">
+    <input type="email" id="email" class="form-control mb-3" placeholder="Email">
   </div>
   <div class="mb-3">
-    <input type="password" id="password" class="form-control" placeholder="Password">
+    <input type="password" id="password" class="form-control mb-3" placeholder="Password">
   </div>
   <button type="submit" class="btn btn-primary">Login</button>
 </form>
@@ -30,7 +30,9 @@ document.getElementById('loginForm').addEventListener('submit', async e=>{
   if(data.ok) location.href='dashboard.html';
   else { msg.className='text-danger'; msg.innerText=data.error; }
 });
+
 </script>
+<script src="js/bootstrap.bundle.min.js"></script>
 </div>
 </body>
 </html>
