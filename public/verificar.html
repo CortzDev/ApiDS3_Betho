@@ -1,37 +1,22 @@
 <!doctype html>
-<html><head>
-<meta charset="utf-8"><title>Verificar - Blockchain</title>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Verificar - Blockchain</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script src="https://cdn.tailwindcss.com"></script>
-</head><body class="bg-gray-100 min-h-screen flex items-center justify-center">
+
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
   <div class="w-full max-w-md bg-white rounded-lg shadow p-6">
     <h2 class="text-2xl font-bold mb-4">Verificar cuenta</h2>
     <input id="email" placeholder="Correo" class="w-full p-2 border rounded mb-3"/>
     <input id="codigo" placeholder="Código OTP" class="w-full p-2 border rounded mb-3"/>
     <div class="flex gap-2">
-      <button onclick="verificar()" class="bg-blue-600 text-white px-4 py-2 rounded">Verificar</button>
-      <button onclick="reenviar()" class="bg-gray-200 px-4 py-2 rounded">Reenviar código</button>
+      <button id="verificarBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Verificar</button>
+      <button id="reenviarBtn" class="bg-gray-200 px-4 py-2 rounded">Reenviar código</button>
     </div>
     <p id="msg" class="mt-2"></p>
   </div>
-
-<script>
-async function verificar(){
-  const email=document.getElementById('email').value;
-  const codigo=document.getElementById('codigo').value;
-  const res = await fetch('/verificar',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, codigo }) });
-  const j = await res.json();
-  if(!j.ok){ document.getElementById('msg').className='text-red-600'; document.getElementById('msg').innerText=j.error; return; }
-  document.getElementById('msg').className='text-green-600'; document.getElementById('msg').innerText=j.message;
-  setTimeout(()=>{ location.href='/'; }, 1500);
-}
-async function reenviar(){
-  const email=document.getElementById('email').value;
-  const res = await fetch('/reenviar',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email }) });
-  const j = await res.json();
-  if(!j.ok){ document.getElementById('msg').className='text-red-600'; document.getElementById('msg').innerText=j.error; return; }
-  if (j.otp) { document.getElementById('msg').className='text-yellow-600'; document.getElementById('msg').innerText='OTP (prueba): '+j.otp; }
-  else { document.getElementById('msg').className='text-green-600'; document.getElementById('msg').innerText=j.message; }
-}
-</script>
-</body></html>
+<script src="./js/verificar.js"></script>
+</body>
+</html>

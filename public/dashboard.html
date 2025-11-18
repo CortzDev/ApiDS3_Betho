@@ -1,120 +1,51 @@
 <!doctype html>
-<html><head>
-<meta charset="utf-8"><title>Dashboard - Blockchain</title>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Dashboard - Blockchain</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.2.1/flowbite.min.css" rel="stylesheet"/>
-<script src="/proteger.js"></script>
-</head><body onload="protegerPagina();cargar();" class="bg-gray-50 min-h-screen p-6">
 
-<nav class="flex justify-between items-center mb-6">
-  <h1 class="text-xl font-semibold">Blockchain Dashboard</h1>
-  <div class="flex items-center gap-3">
-    <button onclick="generarJSON()" class="px-3 py-1 bg-emerald-600 text-white rounded">JSON</button>
-    <button onclick="generarPDF()" class="px-3 py-1 bg-yellow-600 text-white rounded">PDF</button>
-    <button onclick="validar()" class="px-3 py-1 bg-gray-200 rounded">Validar</button>
-    <button onclick="cerrarSesionReal()" class="px-3 py-1 bg-red-600 text-white rounded">Cerrar sesión</button>
-  </div>
-</nav>
-
-
-<div class="bg-white shadow rounded p-4">
-  <table class="w-full text-sm text-left text-gray-600">
-    <thead class="text-xs uppercase bg-gray-100">
-      <tr>
-        <th class="p-2">Block ID</th><th class="p-2">Nonce</th><th class="p-2">Hash</th><th class="p-2">Previous</th><th class="p-2">Válido</th>
-      </tr>
-    </thead>
-    <tbody id="tabla"></tbody>
-  </table>
-</div>
-
-<!-- Modal (flowbite simple) -->
-<div id="blockModal" tabindex="-1" aria-hidden="true" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center">
-  <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full p-5">
-    <div class="flex justify-between items-center">
-      <h3 class="text-lg font-semibold">Detalle del Bloque</h3>
-      <button onclick="cerrarModal()" class="text-gray-500">Cerrar</button>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+  <nav class="flex justify-between items-center mb-6">
+    <h1 class="text-xl font-semibold">Blockchain Dashboard</h1>
+    <div class="flex items-center gap-3">
+      <button id="jsonBtn" class="px-3 py-1 bg-emerald-600 text-white rounded">JSON</button>
+      <button id="pdfBtn" class="px-3 py-1 bg-yellow-600 text-white rounded">PDF</button>
+      <button id="validarBtn" class="px-3 py-1 bg-gray-200 rounded">Validar</button>
+      <button id="cerrarBtn" class="px-3 py-1 bg-red-600 text-white rounded">Cerrar sesión</button>
     </div>
-    <div class="mt-4">
-      <pre id="modalContent" class="bg-gray-100 p-3 rounded text-sm overflow-auto" style="max-height:400px"></pre>
+  </nav>
+  <div class="bg-white shadow rounded p-4">
+    <table class="w-full text-sm text-left text-gray-600">
+      <thead class="text-xs uppercase bg-gray-100">
+        <tr>
+          <th class="p-2">Block ID</th>
+          <th class="p-2">Nonce</th>
+          <th class="p-2">Hash</th>
+          <th class="p-2">Previous</th>
+          <th class="p-2">Válido</th>
+        </tr>
+      </thead>
+      <tbody id="tabla"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal -->
+  <div id="blockModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full p-5">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Detalle del Bloque</h3>
+        <button id="cerrarModalBtn" class="text-gray-500">Cerrar</button>
+      </div>
+      <div class="mt-4">
+        <pre id="modalContent" class="bg-gray-100 p-3 rounded text-sm overflow-auto" style="max-height:400px"></pre>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-function authHeaders(){ const t = localStorage.getItem('token'); return { 'Authorization': 'Bearer '+t, 'Content-Type':'application/json' }; }
-
-async function cargar(){
-  const res = await fetch('/cadena', { headers: authHeaders() });
-  if (res.status === 403) { alert('Sesión inválida o no verificada'); localStorage.clear(); location.href='/'; return; }
-  const data = await res.json();
-  const tbody = document.getElementById('tabla'); tbody.innerHTML = '';
-  data.forEach(b=>{
-    const row = document.createElement('tr');
-    row.className = 'border-b hover:bg-gray-50 cursor-pointer';
-    row.onclick = ()=> mostrarModal(b);
-    row.innerHTML = `
-      <td class="p-2">${b.block_id}</td>
-      <td class="p-2">${b.nonce}</td>
-      <td class="p-2">${b.hash}</td>
-      <td class="p-2">${b.previous_hash}</td>
-      <td class="p-2">${b.valido?'<span class="text-green-600 font-semibold">Válido</span>':'<span class="text-red-600 font-semibold">Alterado</span>'}</td>
-    `;
-    tbody.appendChild(row);
-  });
-}
-
-async function crear(){
-  const nonce = prompt('Nonce (número):');
-  if(nonce===null) return;
-  const res = await fetch('/crearBloque',{ method:'POST', headers: authHeaders(), body: JSON.stringify({ nonce }) });
-  const j = await res.json();
-  if(!j.ok) { alert('Error: '+j.error); return; }
-  alert('Bloque creado: '+j.bloque.block_id);
-  cargar();
-}
-
-async function validar(){
-  const res = await fetch('/validar', { headers: authHeaders() });
-  const j = await res.json();
-  if(!j.ok) alert('Problema: '+j.error); else alert(j.message);
-}
-
-function mostrarModal(b){
-  document.getElementById('modalContent').innerText = JSON.stringify(b,null,2);
-  document.getElementById('blockModal').classList.remove('hidden');
-}
-function cerrarModal(){
-  document.getElementById('blockModal').classList.add('hidden');
-}
-function generarJSON() {
-  fetch('/reporte-json', { headers: authHeaders() })
-    .then(res => res.blob())
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "blockchain.json";
-      a.click();
-    });
-}
-
-function generarPDF() {
-  fetch('/reporte-pdf', { headers: authHeaders() })
-    .then(res => res.blob())
-    .then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "blockchain.pdf";
-      a.click();
-    });
-}
+<script src="./js/dashboard.js"></script>
+</body>
+</html>
 
 
-
-</script>
-
-
-</body></html>

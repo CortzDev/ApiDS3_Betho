@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "autoprefixer": "^10.4.22",
     "bcrypt": "^6.0.0",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
@@ -24,7 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^7.0.10",
     "pdfkit": "^0.17.2",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "postcss": "^8.5.6"
   },
   "repository": {
     "type": "git",
