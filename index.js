@@ -15,7 +15,6 @@ const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
-const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -72,7 +71,7 @@ try{
 // ===============================
 app.use(session({
   store: new pgSession({ pool: db, tableName:'session' }),
-  secret: process.env.SESSION_SECRET || '4895f550f7ec4edad9eca3ef9928e585032ff513c9ffd0da3701b112dc5da2e29eb43fbad17c9e1262a3ae5d8d6cf5f3e169c3885f51f2161d266975b7199e87',
+  secret: process.env.SESSION_SECRET || 'supersecreto123',
   resave:false,
   saveUninitialized:false,
   cookie:{ maxAge:1000*60*60*2, secure: process.env.NODE_ENV==='production', httpOnly:true, sameSite:'lax'}
@@ -127,7 +126,8 @@ app.post("/register", async (req,res)=>{
     const otp = Math.floor(100000+Math.random()*900000).toString();
     const expires = new Date(Date.now()+10*60000);
 
-    await db.query("INSERT INTO usuarios(email,password,verified,otp_code,otp_expires) VALUES($1,$2,$3,$4,$5)",
+    await db.query(
+      "INSERT INTO usuarios(email,password,verified,otp_code,otp_expires) VALUES($1,$2,$3,$4,$5)",
       [email,hashed,false,otp,expires]
     );
 
@@ -191,29 +191,44 @@ app.post("/logout", (req,res)=>{
 });
 
 // ===============================
-// BLOCKCHAIN SIMULADO
+// BLOCKCHAIN SIMULADO + PERSISTENCIA EN DB
 // ===============================
 let cadena = [];
 
 function hash(data){ return crypto.createHash('sha256').update(data).digest('hex'); }
-function crearBloque(nonce){
-  const prevHash = cadena.length===0 ? '0'.repeat(64) : cadena[cadena.length-1].hash;
-  const bloque = { block_id: cadena.length+1, nonce, previous_hash: prevHash };
-  bloque.hash = hash(JSON.stringify(bloque));
-  bloque.valido=true;
-  cadena.push(bloque);
-  return bloque;
-}
 
 app.get("/cadena", sessionAuth, (req,res)=>res.json(cadena));
 
-app.post("/crearBloque", sessionAuth, (req,res)=>{
+app.post("/crearBloque", sessionAuth, async (req,res)=>{
   const { nonce } = req.body;
   if(!nonce) return res.status(400).json({ ok:false,error:"Nonce requerido" });
-  const b = crearBloque(nonce);
-  res.json({ ok:true, bloque:b });
+
+  // Crear bloque
+  const prevHash = cadena.length===0 ? '0'.repeat(64) : cadena[cadena.length-1].hash;
+  const bloque = {
+    block_id: cadena.length+1,
+    nonce,
+    previous_hash: prevHash
+  };
+  bloque.hash = hash(JSON.stringify(bloque));
+  bloque.valido = true;
+  cadena.push(bloque);
+
+  try {
+    // Guardar en DB
+    await db.query(
+      `INSERT INTO bloques (nonce, previous_hash, hash, valido) 
+       VALUES ($1,$2,$3,$4)`,
+      [bloque.nonce, bloque.previous_hash, bloque.hash, bloque.valido]
+    );
+    res.json({ ok:true, bloque });
+  } catch (err) {
+    console.error("Error insertando bloque:", err);
+    res.status(500).json({ ok:false, error:"Error al registrar bloque en DB" });
+  }
 });
 
+// Validar blockchain
 app.get("/validar", sessionAuth, (req,res)=>{
   for(let i=0;i<cadena.length;i++){
     const b = cadena[i];
@@ -235,11 +250,10 @@ app.get("/reporte-json", sessionAuth, (req,res)=>{
 });
 
 app.get("/reporte-pdf", sessionAuth, (req,res)=>{
-  // Generar PDF simple con texto (puedes usar pdfkit para algo más avanzado)
   const pdfText = JSON.stringify(cadena,null,2);
   res.setHeader("Content-Disposition","attachment; filename=blockchain.pdf");
   res.setHeader("Content-Type","application/pdf");
-  res.send(pdfText); // simple texto plano en PDF
+  res.send(pdfText);
 });
 
 // ===============================
@@ -247,4 +261,3 @@ app.get("/reporte-pdf", sessionAuth, (req,res)=>{
 // ===============================
 const PORT = process.env.PORT||3000;
 app.listen(PORT,()=>console.log(`Servidor corriendo en puerto ${PORT}`));
-
