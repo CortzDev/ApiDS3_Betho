@@ -3,46 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Blockchain</title>
-  <!-- Bootstrap CSS seguro vía CDN -->
+  <title>Dashboard</title>
   <link rel="stylesheet" href="css/bootstrap.min.css">
+  <style>
+    body { padding: 20px; }
+    #msg { margin-top: 10px; }
+    tr:hover { cursor: pointer; background-color: #f8f9fa; }
+  </style>
 </head>
-<body class="bg-light">
-
-  <div class="container mt-5">
-    <h1 class="mb-4">Dashboard Blockchain</h1>
-
-    <!-- Mensajes de operación -->
-    <div id="msg" class="mb-3"></div>
-
-    <!-- Botones -->
-    <div class="mb-4">
-      <button id="validarBtn" class="btn btn-primary me-2">Crear Bloque</button>
+<body>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1>Dashboard</h1>
       <button id="logoutBtn" class="btn btn-danger">Cerrar Sesión</button>
     </div>
 
-    <!-- Tabla de bloques -->
-    <div class="table-responsive">
-      <table id="tablaCadena" class="table table-bordered table-hover table-striped">
-        <thead class="table-dark">
-          <tr>
-            <th>ID Bloque</th>
-            <th>Nonce</th>
-            <th>Previous Hash</th>
-            <th>Hash</th>
-            <th>Valido</th>
-          </tr>
-        </thead>
-        <tbody>
-          <!-- Filas se llenan con JS -->
-        </tbody>
-      </table>
-    </div>
+    <button id="validarBtn" class="btn btn-primary mb-3">Crear Bloque</button>
+    <div id="msg"></div>
+
+    <table id="tablaCadena" class="table table-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nonce</th>
+          <th>Previous Hash</th>
+          <th>Hash</th>
+          <th>Valido</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Bloques se cargarán aquí -->
+      </tbody>
+    </table>
   </div>
 
-  <!-- Script JS del dashboard -->
-  <script src="./js/dashboard.js"></script>
-  <!-- Bootstrap JS bundle (opcional para componentes) -->
+  <!-- Modal -->
+<!-- Modal -->
+<div class="modal fade" id="modalBloque" tabindex="-1" aria-labelledby="modalBloqueLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow-lg" style="border-radius: 15px;">
+
+      <!-- HEADER -->
+      <div class="modal-header" style="background: #0d6efd; color: #fff; border-top-left-radius: 15px; border-top-right-radius: 15px;">
+        <h5 class="modal-title" id="modalBloqueLabel">Detalle del Bloque</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <!-- BODY -->
+      <div class="modal-body" style="background-color: #f8f9fc;">
+        <ul class="list-group list-group-flush">
+
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>ID:</strong> <span id="detalleId" class="text-muted"></span>
+          </li>
+
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Nonce:</strong> <span id="detalleNonce" class="text-muted"></span>
+          </li>
+
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Previous Hash:</strong>
+            <span id="detallePrevHash" class="small text-break text-muted"></span>
+          </li>
+
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Hash:</strong>
+            <span id="detalleHash" class="small text-break text-muted"></span>
+          </li>
+
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Válido:</strong>
+            <span id="detalleValido" class="badge rounded-pill bg-success"></span>
+          </li>
+
+        </ul>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="modal-footer" style="border-bottom-left-radius: 15px; border-bottom-right-radius: 15px;">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
   <script src="js/bootstrap.bundle.min.js"></script>
+  <script src="./js/dashboard.js"></script>
 </body>
 </html>

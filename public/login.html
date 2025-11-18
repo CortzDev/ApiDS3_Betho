@@ -5,34 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login</title>
 <link rel="stylesheet" href="css/bootstrap.min.css">
+
+<style>
+    body {
+        background: #f5f7fa;
+    }
+    .login-card {
+        max-width: 420px;
+        margin: auto;
+        margin-top: 80px;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.10);
+        background: #fff;
+    }
+</style>
+
 </head>
-<body class="p-4">
+
+<body>
+
 <div class="container">
-<h1>Login</h1>
-<div id="msg" class="mb-3"></div>
-<form id="loginForm">
-  <div class="mb-3">
-    <input type="email" id="email" class="form-control mb-3" placeholder="Email">
-  </div>
-  <div class="mb-3">
-    <input type="password" id="password" class="form-control mb-3" placeholder="Password">
-  </div>
-  <button type="submit" class="btn btn-primary">Login</button>
-</form>
+
+    <div class="login-card">
+
+        <h2 class="text-center mb-4">Login</h2>
+        <div id="msg" class="mb-3 text-center"></div>
+
+        <form id="loginForm">
+
+            <div class="mb-3">
+                <input type="email" id="email" class="form-control" placeholder="Email">
+            </div>
+
+            <div class="mb-3">
+                <input type="password" id="password" class="form-control" placeholder="Password">
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Ingresar</button>
+
+        </form>
+
+    </div>
+
+</div>
+
 <script>
 document.getElementById('loginForm').addEventListener('submit', async e=>{
   e.preventDefault();
-  const email=document.getElementById('email').value;
-  const password=document.getElementById('password').value;
-  const res = await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password})});
-  const data=await res.json();
-  const msg=document.getElementById('msg');
-  if(data.ok) location.href='dashboard.html';
-  else { msg.className='text-danger'; msg.innerText=data.error; }
-});
 
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+
+  const res = await fetch('/login',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email,password})
+  });
+
+  const data = await res.json();
+  const msg = document.getElementById('msg');
+
+  if(data.ok){
+    location.href = 'dashboard.html';
+  } else {
+    msg.className = 'text-danger';
+    msg.innerText = data.error;
+  }
+});
 </script>
+
 <script src="js/bootstrap.bundle.min.js"></script>
-</div>
+
 </body>
 </html>
