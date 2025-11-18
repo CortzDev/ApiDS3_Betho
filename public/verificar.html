@@ -1,22 +1,34 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<title>Verificar - Blockchain</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verificar - Blockchain</title>
+  <link href="css/styles.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="w-full max-w-md bg-white rounded-lg shadow p-6">
-    <h2 class="text-2xl font-bold mb-4">Verificar cuenta</h2>
-    <input id="email" placeholder="Correo" class="w-full p-2 border rounded mb-3"/>
-    <input id="codigo" placeholder="Código OTP" class="w-full p-2 border rounded mb-3"/>
-    <div class="flex gap-2">
-      <button id="verificarBtn" class="bg-blue-600 text-white px-4 py-2 rounded">Verificar</button>
-      <button id="reenviarBtn" class="bg-gray-200 px-4 py-2 rounded">Reenviar código</button>
+<body class="bg-light">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card p-4 shadow-sm">
+          <h2 class="mb-4 text-center">Verificar cuenta</h2>
+          <div class="mb-3">
+            <input id="email" type="email" class="form-control" placeholder="Correo">
+          </div>
+          <div class="mb-3">
+            <input id="codigo" class="form-control" placeholder="Código OTP">
+          </div>
+          <div class="d-flex justify-content-between">
+            <button id="verifyBtn" class="btn btn-primary">Verificar</button>
+            <button id="resendBtn" class="btn btn-secondary">Reenviar OTP</button>
+          </div>
+          <p id="msg" class="mt-3"></p>
+        </div>
+      </div>
     </div>
-    <p id="msg" class="mt-2"></p>
   </div>
-<script src="./js/verificar.js"></script>
+
+  <script src="js/verify.js"></script>
 </body>
 </html>
+
