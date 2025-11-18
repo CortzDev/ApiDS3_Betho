@@ -1,56 +1,58 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Dashboard - Blockchain</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <title>Dashboard - Blockchain</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
+  
+  <link rel="stylesheet" href="/css/estilos.css">
 
-<!-- Script local, permitido por CSP -->
-<script src="/proteger.js" defer></script>
-<script src="/dashboard.js" defer></script> <!-- Nuevo archivo JS seguro -->
+  
+  <script src="/js/dashboard.js" defer></script>
+
 </head>
 
 <body class="bg-gray-50 min-h-screen p-6">
 
-<nav class="flex justify-between items-center mb-6">
-  <h1 class="text-xl font-semibold">Blockchain Dashboard</h1>
-
-  <div class="flex items-center gap-3">
-    <button id="btn-json" class="px-3 py-1 bg-emerald-600 text-white rounded">JSON</button>
-    <button id="btn-pdf" class="px-3 py-1 bg-yellow-600 text-white rounded">PDF</button>
-    <button id="btn-validar" class="px-3 py-1 bg-gray-200 rounded">Validar</button>
-    <button id="btn-logout" class="px-3 py-1 bg-red-600 text-white rounded">Cerrar sesión</button>
-  </div>
-</nav>
-
-<div class="bg-white shadow rounded p-4">
-  <table class="w-full text-sm text-left text-gray-600">
-    <thead class="text-xs uppercase bg-gray-100">
-      <tr>
-        <th class="p-2">Block ID</th>
-        <th class="p-2">Nonce</th>
-        <th class="p-2">Hash</th>
-        <th class="p-2">Previous</th>
-        <th class="p-2">Válido</th>
-      </tr>
-    </thead>
-    <tbody id="tabla"></tbody>
-  </table>
-</div>
-
-<!-- Modal seguro sin Flowbite -->
-<div id="blockModal" class="fixed inset-0 hidden bg-black/50 items-center justify-center">
-  <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-5">
-    <div class="flex justify-between items-center mb-4">
-      <h3 class="text-lg font-semibold">Detalle del Bloque</h3>
-      <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">Cerrar</button>
+  <nav class="flex justify-between items-center mb-6">
+    <h1 class="text-xl font-semibold">Blockchain Dashboard</h1>
+    <div class="flex items-center gap-3">
+      <button id="btnJSON" class="px-3 py-1 bg-emerald-600 text-white rounded">JSON</button>
+      <button id="btnPDF" class="px-3 py-1 bg-yellow-600 text-white rounded">PDF</button>
+      <button id="btnValidar" class="px-3 py-1 bg-gray-200 rounded">Validar</button>
+      <button id="btnCerrarSesion" class="px-3 py-1 bg-red-600 text-white rounded">Cerrar sesión</button>
     </div>
-    <pre id="modalContent" class="bg-gray-100 p-3 rounded text-sm overflow-auto" style="max-height:400px"></pre>
+  </nav>
+
+  <div class="bg-white shadow rounded p-4">
+    <table class="w-full text-sm text-left text-gray-600">
+      <thead class="text-xs uppercase bg-gray-100">
+        <tr>
+          <th class="p-2">Block ID</th>
+          <th class="p-2">Nonce</th>
+          <th class="p-2">Hash</th>
+          <th class="p-2">Previous</th>
+          <th class="p-2">Válido</th>
+        </tr>
+      </thead>
+      <tbody id="tabla"></tbody>
+    </table>
   </div>
-</div>
+
+  <!-- Modal -->
+  <div id="blockModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full p-5">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Detalle del Bloque</h3>
+        <button id="btnCerrarModal" class="text-gray-500">Cerrar</button>
+      </div>
+      <div class="mt-4">
+        <pre id="modalContent" class="bg-gray-100 p-3 rounded text-sm overflow-auto"
+             style="max-height:400px"></pre>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>
