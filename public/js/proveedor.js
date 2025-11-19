@@ -1,7 +1,6 @@
 // Token y rol
 const token = localStorage.getItem("token");
 const rol = localStorage.getItem("rol");
-
 if (!token || rol !== "proveedor") {
   alert("No autorizado");
   window.location.href = "/login.html";
@@ -26,9 +25,7 @@ btnLogout.addEventListener("click", () => {
 
 // Cargar categorías
 async function cargarCategorias() {
-  const res = await fetch("/api/categorias", {
-    headers: { "Authorization": "Bearer " + token }
-  });
+  const res = await fetch("/api/categorias", { headers: { "Authorization": "Bearer " + token } });
   const data = await res.json();
   categoria.innerHTML = "";
   if (data.ok) {
@@ -43,9 +40,7 @@ async function cargarCategorias() {
 
 // Cargar productos
 async function cargarProductos() {
-  const res = await fetch("/api/proveedor/productos", {
-    headers: { "Authorization": "Bearer " + token }
-  });
+  const res = await fetch("/api/proveedor/productos", { headers: { "Authorization": "Bearer " + token } });
   const data = await res.json();
   tabla.innerHTML = "";
   if (data.ok) {

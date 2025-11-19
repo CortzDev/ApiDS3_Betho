@@ -1,11 +1,9 @@
-const form = document.getElementById("loginForm");
+const form = document.getElementById("formLogin");
 
 form.addEventListener("submit", async e => {
   e.preventDefault();
-  
-  const email = form.email.value.trim();
-  const password = form.password.value.trim();
-
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
   if (!email || !password) return;
 
   try {
@@ -15,11 +13,9 @@ form.addEventListener("submit", async e => {
       body: JSON.stringify({ email, password })
     });
     const data = await res.json();
-
     if (data.ok) {
       localStorage.setItem("token", data.token);
       localStorage.setItem("rol", data.usuario.rol);
-
       if (data.usuario.rol === "proveedor") {
         window.location.href = "/proveedor/dashboard";
       } else if (data.usuario.rol === "admin") {
