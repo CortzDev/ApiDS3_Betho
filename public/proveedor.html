@@ -15,59 +15,55 @@
 
   <h4>Agregar Producto</h4>
 
- <h4>Agregar Producto</h4>
+  <form id="formProducto">
 
-<form id="formProducto">
+    <div class="mb-3">
+      <label>Nombre</label>
+      <input type="text" class="form-control" id="nombre" required>
+    </div>
 
-  <div class="mb-3">
-    <label>Nombre</label>
-    <input type="text" class="form-control" id="nombre" required>
-  </div>
+    <div class="mb-3">
+      <label>Descripción</label>
+      <input type="text" class="form-control" id="descripcion">
+    </div>
 
-  <div class="mb-3">
-    <label>Descripción</label>
-    <input type="text" class="form-control" id="descripcion">
-  </div>
+    <div class="mb-3">
+      <label>Categoría</label>
+      <select class="form-control" id="categoria" required></select>
+    </div>
 
-  <div class="mb-3">
-    <label>Categoría</label>
-    <select class="form-control" id="categoria" required></select>
-  </div>
+    <div class="mb-3">
+      <label>Precio</label>
+      <input type="number" class="form-control" id="precio" required step="0.01">
+    </div>
 
-  <div class="mb-3">
-    <label>Precio</label>
-    <input type="number" class="form-control" id="precio" required step="0.01">
-  </div>
+    <div class="mb-3">
+      <label>Stock</label>
+      <input type="number" class="form-control" id="stock" required min="0">
+    </div>
 
-  <div class="mb-3">
-    <label>Stock</label>
-    <input type="number" class="form-control" id="stock" required min="0">
-  </div>
+    <button class="btn btn-success" type="submit">Guardar</button>
+  </form>
 
-  <button class="btn btn-success">Guardar</button>
-</form>
+  <p id="msg" class="mt-2"></p>
 
-<p id="msg" class="mt-2"></p>
+  <h4 class="mt-4">Productos</h4>
 
-<h4 class="mt-4">Productos</h4>
-
-<table class="table table-striped">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Nombre</th>
-      <th>Descripción</th>
-      <th>Categoría</th>
-      <th>Precio</th>
-      <th>Stock</th>
-      <th>Editar</th>
-      <th>Eliminar</th>
-    </tr>
-  </thead>
-  <tbody id="tablaProductos"></tbody>
-</table>
-
-  
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Descripción</th>
+        <th>Categoría</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        <th>Editar</th>
+        <th>Eliminar</th>
+      </tr>
+    </thead>
+    <tbody id="tablaProductos"></tbody>
+  </table>
 
 </div>
 

@@ -6,9 +6,6 @@
 const token = localStorage.getItem("token");
 const rol = localStorage.getItem("rol");
 
-
-
-
 if (!token || rol !== "proveedor") {
   alert("No autorizado.");
   window.location.href = "/login.html";
@@ -17,6 +14,7 @@ if (!token || rol !== "proveedor") {
 // Referencias
 const tabla = document.getElementById("tablaProductos");
 const form = document.getElementById("formProducto");
+
 const nombre = document.getElementById("nombre");
 const descripcion = document.getElementById("descripcion");
 const categoria = document.getElementById("categoria");
@@ -26,18 +24,19 @@ const msg = document.getElementById("msg");
 const btnLogout = document.getElementById("btnLogout");
 
 let editando = false;
-let productoEditandoId = null;
+let idEditando = null;
 
+// =========================
 // Cerrar sesión
+// =========================
 btnLogout.addEventListener("click", () => {
   localStorage.removeItem("token");
   localStorage.removeItem("rol");
   window.location.href = "/login.html";
 });
 
-
 // =========================
-// Cargar categorías
+// CARGAR CATEGORÍAS
 // =========================
 async function cargarCategorias() {
   try {
@@ -47,71 +46,67 @@ async function cargarCategorias() {
 
     const data = await res.json();
 
-    if (!data.ok) {
-      console.error("Error al obtener categorías:", data.error);
-      return;
-    }
-
     categoria.innerHTML = "";
 
-    data.categorias.forEach(cat => {
-      const opt = document.createElement("option");
-      opt.value = cat.id;
-      opt.textContent = cat.nombre;
-      categoria.appendChild(opt);
-    });
+    if (data.ok) {
+      data.categorias.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat.id;
+        opt.textContent = cat.nombre;
+        categoria.appendChild(opt);
+      });
+    }
 
   } catch (err) {
     console.error("Error cargando categorías:", err);
   }
 }
 
-
-function editarProducto(id, nombreP, descripcionP, categoriaP, precioP, stockP) {
+// =========================
+// EDITAR PRODUCTO (abre formulario)
+// =========================
+function activarModoEdicion(producto) {
   editando = true;
-  idEditando = id;
+  idEditando = producto.id;
 
-  nombre.value = nombreP;
-  descripcion.value = descripcionP;
-  precio.value = precioP;
-  stock.value = stockP;
+  nombre.value = producto.nombre;
+  descripcion.value = producto.descripcion;
+  precio.value = producto.precio;
+  stock.value = producto.stock;
 
-  [...categoria.options].forEach(opt => {
-    if (opt.textContent === categoriaP) opt.selected = true;
-  });
+  categoria.value = producto.categoria_id;
 
-  msg.innerHTML = `<b>Editando producto ID ${id}</b>`;
+  msg.innerHTML = `<b>Editando producto ID ${producto.id}</b>`;
   msg.className = "text-primary";
 }
 
-
+// =========================
+// ELIMINAR PRODUCTO
+// =========================
 async function eliminarProducto(id) {
   if (!confirm("¿Seguro de eliminar este producto?")) return;
 
   try {
     const res = await fetch(`/api/proveedor/productos/${id}`, {
       method: "DELETE",
-      headers: {
-        "Authorization": "Bearer " + token
-      }
+      headers: { "Authorization": "Bearer " + token }
     });
 
     const data = await res.json();
 
     if (data.ok) {
-      alert("Producto eliminado");
       cargarProductos();
     } else {
       alert("Error: " + data.error);
     }
-
   } catch (err) {
-    console.error(err);
+    console.error("Error eliminando producto:", err);
   }
 }
 
-
-
+// =========================
+// LISTAR PRODUCTOS
+// =========================
 async function cargarProductos() {
   try {
     const res = await fetch("/api/proveedor/productos", {
@@ -129,23 +124,22 @@ async function cargarProductos() {
           <td>${p.id}</td>
           <td>${p.nombre}</td>
           <td>${p.descripcion}</td>
-          <td>${p.categoria}</td>
+          <td>${p.categoria_id}</td>
           <td>$${p.precio}</td>
           <td>${p.stock}</td>
-
-          <td>
-            <button class="btn btn-warning btn-sm"
-              onclick="editarProducto(${p.id}, '${p.nombre}', '${p.descripcion}', '${p.categoria}', ${p.precio}, ${p.stock})">
-              Editar
-            </button>
-          </td>
-
-          <td>
-            <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">
-              Eliminar
-            </button>
-          </td>
+          <td><button class="btn btn-warning btn-sm btn-edit">Editar</button></td>
+          <td><button class="btn btn-danger btn-sm btn-delete">Eliminar</button></td>
         `;
+
+        // --- EVENTOS SIN INLINE (CSP-friendly) ---
+
+        tr.querySelector(".btn-edit").addEventListener("click", () => {
+          activarModoEdicion(p);
+        });
+
+        tr.querySelector(".btn-delete").addEventListener("click", () => {
+          eliminarProducto(p.id);
+        });
 
         tabla.appendChild(tr);
       });
@@ -162,11 +156,8 @@ async function cargarProductos() {
   }
 }
 
-
-
-
 // =========================
-// Agregar producto
+// AGREGAR / EDITAR PRODUCTO
 // =========================
 form.addEventListener("submit", async e => {
   e.preventDefault();
@@ -200,24 +191,29 @@ form.addEventListener("submit", async e => {
     const data = await res.json();
 
     if (data.ok) {
-      msg.innerText = editando ? "Producto editado correctamente" : "Producto agregado";
+      msg.innerText = editando
+        ? "Producto actualizado correctamente"
+        : "Producto agregado correctamente";
+
       msg.className = "text-success";
 
-      form.reset();
       editando = false;
       idEditando = null;
+      form.reset();
       cargarProductos();
+
     } else {
       msg.innerText = "Error: " + data.error;
       msg.className = "text-danger";
     }
 
   } catch (err) {
-    console.error(err);
+    console.error("Error guardando producto:", err);
   }
 });
 
-
-// Inicializar vista
+// =========================
+// INICIALIZAR
+// =========================
 cargarCategorias();
 cargarProductos();
