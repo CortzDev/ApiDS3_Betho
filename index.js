@@ -209,12 +209,12 @@ app.delete("/roles/:id", authRequired, adminOnly, async (req, res) => {
   res.json({ ok: true, message: "Rol eliminado" });
 });
 
-// Dashboards
-app.get("/dashboard", authRequired, adminOnly, (req, res) => {
+// Dashboard admin y proveedor (ya sin authRequired para HTML)
+app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
 
-app.get("/proveedor/dashboard", authRequired, proveedorOnly, (req, res) => {
+app.get("/proveedor/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "proveedor.html"));
 });
 
@@ -268,4 +268,3 @@ async function main() {
 
 // Ejecutar main
 main().catch(err => console.error(err));
-
