@@ -1,5 +1,11 @@
 const form = document.getElementById("formLogin");
 const msg = document.getElementById("msg");
+const btnRegister = document.getElementById("btnRegister");
+
+// ➤ Redirigir a registro desde el botón
+btnRegister.addEventListener("click", () => {
+  window.location.href = "register.html";
+});
 
 form.addEventListener("submit", async e => {
   e.preventDefault();

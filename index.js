@@ -18,15 +18,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"))); // Servir archivos estáticos
 
 // --------------------- DB ---------------------
 const db = new Pool({
   user: process.env.PGUSER || "postgres",
-  password: process.env.PGPASSWORD || "SccSUkutVxtIRJwcfrLsmZBYDYPxGEbP",
+  password: process.env.PGPASSWORD || "12345",
   database: process.env.PGDATABASE || "railway",
-  host: process.env.PGHOST || "turntable.proxy.rlwy.net",
-  port: parseInt(process.env.PGPORT || "40300")
+  host: process.env.PGHOST || "localhost",
+  port: parseInt(process.env.PGPORT || "5432")
 });
 
 // --------------------- Blockchain utils ---------------------
@@ -52,7 +52,12 @@ async function registrarEnBlockchain(operacion, dataObj) {
   );
 }
 
-// --------------------- Rutas ---------------------
+// --------------------- RUTAS ---------------------
+
+// ======= PÁGINA POR DEFECTO: login.html =======
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
 
 // Registro de usuarios
 app.post("/api/register", async (req, res) => {
@@ -65,34 +70,49 @@ app.post("/api/register", async (req, res) => {
     if (!rolRow.rows.length) return res.status(400).json({ ok: false, error: "Rol inválido" });
 
     const hashed = await bcrypt.hash(password, 10);
-    await db.query(
-      `INSERT INTO usuarios(nombre,email,password,rol_id) VALUES ($1,$2,$3,$4)`,
+
+    const rUser = await db.query(
+      `INSERT INTO usuarios(nombre,email,password,rol_id) 
+       VALUES ($1,$2,$3,$4) RETURNING id, nombre, email`,
       [nombre, email, hashed, rolRow.rows[0].id]
     );
 
     await registrarEnBlockchain("CREAR_USUARIO", { nombre, email });
-    res.json({ ok: true, message: "Usuario registrado correctamente" });
+    res.json({ ok: true, usuario: rUser.rows[0] });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, error: "Error interno" });
+    res.status(500).json({ ok: false });
   }
 });
 
-// Login
+// Login (crea proveedor automáticamente si no existe)
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
+
   try {
     const q = `
       SELECT u.id, u.nombre, u.password, r.nombre AS rol
       FROM usuarios u 
       JOIN roles r ON r.id = u.rol_id
-      WHERE email=$1`;
+      WHERE email=$1
+    `;
     const r = await db.query(q, [email]);
+
     if (!r.rows.length) return res.json({ ok: false });
 
     const user = r.rows[0];
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.json({ ok: false });
+
+    // Crear fila proveedor si es proveedor
+    if (user.rol === "proveedor") {
+      await db.query(
+        `INSERT INTO proveedor (usuario_id)
+         VALUES ($1)
+         ON CONFLICT (usuario_id) DO NOTHING`,
+        [user.id]
+      );
+    }
 
     const token = jwt.sign(
       { id: user.id, nombre: user.nombre, rol: user.rol },
@@ -101,6 +121,7 @@ app.post("/api/login", async (req, res) => {
     );
 
     res.json({ ok: true, token, usuario: { id: user.id, nombre: user.nombre, rol: user.rol } });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false });
@@ -126,90 +147,85 @@ app.get("/api/perfil", authRequired, async (req, res) => {
 
 // Registro proveedor
 app.post("/api/register-proveedor", async (req, res) => {
-  const { nombre, email, password } = req.body;
+  const { nombre, email, password, empresa, telefono, direccion } = req.body;
+
   try {
     const exist = await db.query("SELECT id FROM usuarios WHERE email=$1", [email]);
     if (exist.rows.length) return res.status(400).json({ ok: false, error: "Email ya registrado" });
 
-    const rolRow = await db.query("SELECT id FROM roles WHERE nombre='proveedor'");
-    if (!rolRow.rows.length) return res.status(500).json({ ok: false, error: "Rol proveedor no existe" });
-
+    const rolProv = await db.query("SELECT id FROM roles WHERE nombre='proveedor'");
     const hashed = await bcrypt.hash(password, 10);
+
+    const rUser = await db.query(
+      `INSERT INTO usuarios(nombre,email,password,rol_id)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [nombre, email, hashed, rolProv.rows[0].id]
+    );
+
     await db.query(
-      `INSERT INTO usuarios(nombre,email,password,rol_id) VALUES ($1,$2,$3,$4)`,
-      [nombre, email, hashed, rolRow.rows[0].id]
+      `INSERT INTO proveedor(usuario_id, empresa, telefono, direccion)
+       VALUES ($1,$2,$3,$4)`,
+      [rUser.rows[0].id, empresa, telefono, direccion]
     );
 
-    await registrarEnBlockchain("CREAR_PROVEEDOR", { nombre, email });
-    res.json({ ok: true, message: "Proveedor registrado correctamente" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: "Error interno" });
-  }
-});
+    res.json({ ok: true, message: "Proveedor creado" });
 
-// Productos proveedor
-app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
-  const { nombre, descripcion, categoria_id, precio } = req.body;
-  try {
-    const r = await db.query(
-      `INSERT INTO productos(nombre, descripcion, categoria_id, proveedor_id, precio)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [nombre, descripcion, categoria_id, req.user.id, precio]
-    );
-    await registrarEnBlockchain("CREAR_PRODUCTO", { proveedor: req.user.nombre, producto: r.rows[0] });
-    res.json({ ok: true, producto: r.rows[0] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: "Error interno" });
-  }
-});
-
-app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
-  try {
-    const r = await db.query("SELECT * FROM productos WHERE proveedor_id=$1", [req.user.id]);
-    res.json({ ok: true, productos: r.rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false });
   }
 });
 
-// Obtener categorías
-app.get("/api/categorias", authRequired, async (req, res) => {
+// CREAR PRODUCTO
+app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
+  const { nombre, descripcion, categoria_id, precio } = req.body;
+
   try {
-    const r = await db.query("SELECT id, nombre FROM categorias ORDER BY id");
-    res.json({ ok: true, categorias: r.rows });
+    const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
+
+    if (!rProv.rows.length)
+      return res.status(400).json({ ok: false, error: "Proveedor no encontrado" });
+
+    const proveedorId = rProv.rows[0].id;
+
+    const r = await db.query(
+      `INSERT INTO productos(nombre, descripcion, categoria_id, proveedor_id, precio)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [nombre, descripcion, categoria_id, proveedorId, precio]
+    );
+
+    res.json({ ok: true, producto: r.rows[0] });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false, error: "Error al obtener categorías" });
+    res.status(500).json({ ok: false });
   }
 });
 
-// CRUD roles (admin)
-app.get("/roles", authRequired, adminOnly, async (req, res) => {
-  const r = await db.query("SELECT * FROM roles ORDER BY id");
-  res.json({ ok: true, roles: r.rows });
+// LISTAR PRODUCTOS DE PROVEEDOR
+app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
+  try {
+    const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
+
+    if (!rProv.rows.length)
+      return res.status(400).json({ ok: false, error: "Proveedor no encontrado" });
+
+    const proveedorId = rProv.rows[0].id;
+
+    const productos = await db.query(
+      "SELECT * FROM productos WHERE proveedor_id=$1",
+      [proveedorId]
+    );
+
+    res.json({ ok: true, productos: productos.rows });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
 });
 
-app.post("/roles", authRequired, adminOnly, async (req, res) => {
-  const { nombre } = req.body;
-  await db.query("INSERT INTO roles(nombre) VALUES($1)", [nombre]);
-  res.json({ ok: true, message: "Rol creado" });
-});
-
-app.put("/roles/:id", authRequired, adminOnly, async (req, res) => {
-  const { nombre } = req.body;
-  await db.query("UPDATE roles SET nombre=$1 WHERE id=$2", [nombre, req.params.id]);
-  res.json({ ok: true, message: "Rol actualizado" });
-});
-
-app.delete("/roles/:id", authRequired, adminOnly, async (req, res) => {
-  await db.query("DELETE FROM roles WHERE id=$1", [req.params.id]);
-  res.json({ ok: true, message: "Rol eliminado" });
-});
-
-// Dashboard admin y proveedor (ya sin authRequired para HTML)
+// ===================== DASHBOARDS =====================
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
 });
@@ -225,6 +241,9 @@ async function initDb() {
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(50) UNIQUE NOT NULL
     );
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS usuarios (
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(100) NOT NULL,
@@ -232,14 +251,40 @@ async function initDb() {
       password TEXT NOT NULL,
       rol_id INT NOT NULL REFERENCES roles(id)
     );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS proveedor (
+      id SERIAL PRIMARY KEY,
+      usuario_id INT NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+      empresa VARCHAR(150),
+      telefono VARCHAR(30),
+      direccion TEXT,
+      creado_en TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS categorias (
+      id SERIAL PRIMARY KEY,
+      nombre VARCHAR(100) UNIQUE NOT NULL,
+      descripcion TEXT
+    );
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS productos (
       id SERIAL PRIMARY KEY,
       nombre VARCHAR(150) NOT NULL,
       descripcion TEXT,
-      categoria_id INT NOT NULL,
-      proveedor_id INT NOT NULL REFERENCES usuarios(id),
-      precio NUMERIC(12,2) NOT NULL
+      categoria_id INT NOT NULL REFERENCES categorias(id),
+      proveedor_id INT NOT NULL REFERENCES proveedor(id),
+      precio NUMERIC(12,2) NOT NULL,
+      stock INT NOT NULL DEFAULT 0
     );
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS blockchain (
       id SERIAL PRIMARY KEY,
       nonce VARCHAR(150) NOT NULL,
@@ -248,15 +293,14 @@ async function initDb() {
       hash_anterior TEXT,
       fecha TIMESTAMP NOT NULL DEFAULT NOW()
     );
-    CREATE TABLE IF NOT EXISTS categorias (
-      id SERIAL PRIMARY KEY,
-      nombre VARCHAR(100) NOT NULL
-    );
   `);
 
+  // Inicializar roles
   const r = await db.query("SELECT COUNT(*) FROM roles");
   if (parseInt(r.rows[0].count) === 0) {
-    await db.query("INSERT INTO roles(nombre) VALUES('usuario'),('admin'),('proveedor')");
+    await db.query(`
+      INSERT INTO roles(nombre) VALUES ('usuario'),('admin'),('proveedor')
+    `);
   }
 }
 
@@ -266,5 +310,4 @@ async function main() {
   app.listen(3000, () => console.log("Servidor JWT en http://localhost:3000"));
 }
 
-// Ejecutar main
 main().catch(err => console.error(err));
