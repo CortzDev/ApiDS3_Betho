@@ -114,39 +114,52 @@ async function registrarEnBlockchain(operacion, dataObj) {
 }
 
 
-app.post("/register", async (req, res) => {
+app.post("/register", async (req, res) => { 
   const { nombre = '', email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ ok: false, error: "Email y password obligatorios" });
+
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: "Email y password obligatorios" });
+  }
 
   try {
+    // verificar si ya existe el usuario
     const exist = await db.query("SELECT id FROM usuarios WHERE email=$1", [email]);
-    if (exist.rows.length > 0) return res.status(400).json({ ok: false, error: "Usuario ya existe" });
+    if (exist.rows.length > 0) {
+      return res.status(400).json({ ok: false, error: "Usuario ya existe" });
+    }
 
+    // encriptar contraseña
     const hashed = await bcrypt.hash(password, 10);
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 10 * 60000);
 
-    // obtener rol 'usuario' (asumimos que tabla roles ya tiene ambos)
-    const rolRow = await db.query("SELECT id FROM roles WHERE nombre='usuario' LIMIT 1");
-    const rolId = (rolRow.rows[0] && rolRow.rows[0].id) ? rolRow.rows[0].id : null;
-
-    await db.query(
-      `INSERT INTO usuarios (nombre, email, password, rol_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [nombre, email, hashed, rolId, false, otp, expires]
+    // obtener ID de rol "usuario"
+    const rolRow = await db.query(
+      "SELECT id FROM roles WHERE nombre='usuario' LIMIT 1"
     );
 
-    await sendOtpEmail(email, otp);
+    if (rolRow.rows.length === 0) {
+      return res.status(500).json({ ok: false, error: "Rol 'usuario' no existe en la base de datos" });
+    }
 
-    // Registrar evento en blockchain (opcional: no contiene password)
-    await registrarEnBlockchain('CREAR_USUARIO', { email, nombre });
+    const rolId = rolRow.rows[0].id;
 
-    res.json({ ok: true, message: "Usuario registrado. Verifica tu correo", otp: smtpReady ? undefined : otp });
+    // insertar usuario sin verificación
+    await db.query(
+      `INSERT INTO usuarios (nombre, email, password, rol_id)
+       VALUES ($1, $2, $3, $4)`,
+      [nombre, email, hashed, rolId]
+    );
+
+    // registrar evento en blockchain
+    await registrarEnBlockchain("CREAR_USUARIO", { email, nombre });
+
+    res.json({ ok: true, message: "Usuario registrado correctamente" });
+
   } catch (err) {
     console.error("register error:", err);
     res.status(500).json({ ok: false, error: "Error en servidor" });
   }
 });
+
 
 app.post("/verify", async (req, res) => {
   const { email, otp } = req.body;
@@ -158,7 +171,7 @@ app.post("/verify", async (req, res) => {
     const u = r.rows[0];
     if (u.otp_code !== otp || new Date(u.otp_expires) < new Date()) return res.status(400).json({ ok: false, error: "OTP inválido o expirado" });
 
-   // await db.query("UPDATE usuarios SET verified=true, otp_code=NULL, otp_expires=NULL WHERE id=$1", [u.id]);
+ 
 
     await registrarEnBlockchain('VERIFICAR_USUARIO', { email });
 
