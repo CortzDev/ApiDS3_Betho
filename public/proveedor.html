@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Proveedor</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-4">
+    <h2>Dashboard - Proveedor</h2>
+    <p id="usuarioInfo"></p>
+
+    <!-- Formulario para agregar producto -->
+    <div class="card mt-3">
+      <div class="card-header">Agregar Producto</div>
+      <div class="card-body">
+        <form id="formProducto">
+          <div class="mb-3">
+            <label>Nombre</label>
+            <input type="text" id="nombre" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label>Descripción</label>
+            <textarea id="descripcion" class="form-control" required></textarea>
+          </div>
+          <div class="mb-3">
+            <label>Categoría</label>
+            <select id="categoria_id" class="form-control" required>
+              <option value="1">Categoría 1</option>
+              <option value="2">Categoría 2</option>
+              <option value="3">Categoría 3</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label>Precio</label>
+            <input type="number" id="precio" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Guardar Producto</button>
+        </form>
+        <div id="msg" class="mt-2"></div>
+      </div>
+    </div>
+
+    <!-- Lista de productos -->
+    <div class="mt-4">
+      <h4>Mis Productos</h4>
+      <table class="table table-bordered" id="tablaProductos">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Categoría</th>
+            <th>Precio</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/proveedor.js"></script>
+</body>
+</html>

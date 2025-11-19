@@ -1,26 +1,30 @@
 const jwt = require("jsonwebtoken");
 
-// Middleware para verificar token
 function authRequired(req, res, next) {
+  const authHeader = req.headers.authorization || req.cookies?.token;
+  if (!authHeader) return res.status(403).json({ ok: false, error: "No autorizado" });
+
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : authHeader;
+
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Token requerido" });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "jwtsecret");
+    req.user = decoded; // { id, nombre, rol }
     next();
-  } catch (err) {
-    return res.status(401).json({ error: "Token inválido" });
+  } catch (e) {
+    return res.status(403).json({ ok: false, error: "Token inválido" });
   }
 }
 
-// Middleware solo para administradores
 function adminOnly(req, res, next) {
-  if (req.user.rol_id !== 1) {
-    return res.status(403).json({ error: "Acceso denegado: solo administradores" });
-  }
+  if (!req.user) return res.status(403).json({ ok: false, error: "No autorizado" });
+  if (req.user.rol !== "admin") return res.status(403).json({ ok: false, error: "Acceso restringido a admins" });
   next();
 }
 
-module.exports = { authRequired, adminOnly };
+function proveedorOnly(req, res, next) {
+  if (!req.user) return res.status(403).json({ ok: false, error: "No autorizado" });
+  if (req.user.rol !== "proveedor") return res.status(403).json({ ok: false, error: "Acceso restringido a proveedores" });
+  next();
+}
+
+module.exports = { authRequired, adminOnly, proveedorOnly };
