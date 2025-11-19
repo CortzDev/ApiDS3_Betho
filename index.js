@@ -253,23 +253,42 @@ app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, re
 });
 
 // ===================== LISTAR PRODUCTOS PROVEEDOR =====================
+// LISTAR PRODUCTOS DE PROVEEDOR (con nombre de categoría)
 app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
   try {
-    const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
+    const rProv = await db.query(
+      "SELECT id FROM proveedor WHERE usuario_id=$1",
+      [req.user.id]
+    );
 
     if (!rProv.rows.length)
       return res.status(400).json({ ok: false, error: "Proveedor no encontrado" });
 
     const proveedorId = rProv.rows[0].id;
 
-    const productos = await db.query("SELECT * FROM productos WHERE proveedor_id=$1", [proveedorId]);
+    // 🔥 JOIN para obtener el nombre de la categoría
+    const productos = await db.query(`
+      SELECT 
+  p.id,
+  p.nombre,
+  p.descripcion,
+  p.precio,
+  p.stock,
+  c.nombre AS categoria
+FROM productos p
+JOIN categorias c ON c.id = p.categoria_id
+WHERE p.proveedor_id = $1
+
+    `, [proveedorId]);
+
     res.json({ ok: true, productos: productos.rows });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ ok: false });
+    res.status(500).json({ ok: false, error: "Error interno" });
   }
 });
+
 
 // Obtener un producto del proveedor
 app.get("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
@@ -410,6 +429,18 @@ app.get("/api/productos", authRequired, async (req, res) => {
     res.status(500).json({ ok: false, error: "Error al obtener productos" });
   }
 });
+
+// Obtener categorías
+app.get("/api/categorias", authRequired, async (req, res) => {
+  try {
+    const r = await db.query("SELECT id, nombre FROM categorias ORDER BY id");
+    res.json({ ok: true, categorias: r.rows });
+  } catch (err) {
+    console.error("Error al obtener categorías:", err);
+    res.status(500).json({ ok: false, error: "Error al obtener categorías" });
+  }
+});
+
 
 
 // ===================== DASHBOARDS =====================

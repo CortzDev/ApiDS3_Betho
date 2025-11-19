@@ -1,9 +1,16 @@
+// =========================
+//   proveedor.js
+// =========================
+
 // Token y rol
 const token = localStorage.getItem("token");
 const rol = localStorage.getItem("rol");
 
+
+
+
 if (!token || rol !== "proveedor") {
-  alert("No autorizado");
+  alert("No autorizado.");
   window.location.href = "/login.html";
 }
 
@@ -18,161 +25,199 @@ const stock = document.getElementById("stock");
 const msg = document.getElementById("msg");
 const btnLogout = document.getElementById("btnLogout");
 
-// Logout
+let editando = false;
+let productoEditandoId = null;
+
+// Cerrar sesión
 btnLogout.addEventListener("click", () => {
-  localStorage.clear();
+  localStorage.removeItem("token");
+  localStorage.removeItem("rol");
   window.location.href = "/login.html";
 });
 
+
+// =========================
 // Cargar categorías
-// Cargar categorías desde la API
+// =========================
 async function cargarCategorias() {
-  const res = await fetch("/api/categorias", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  const data = await res.json();
-  categoria.innerHTML = "";
-
-  if (data.ok) {
-    data.categorias.forEach(c => {
-      const option = document.createElement("option");
-      option.value = c.id;
-      option.textContent = c.nombre;
-      categoria.appendChild(option);
+  try {
+    const res = await fetch("/api/categorias", {
+      headers: { "Authorization": "Bearer " + token }
     });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      console.error("Error al obtener categorías:", data.error);
+      return;
+    }
+
+    categoria.innerHTML = "";
+
+    data.categorias.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat.id;
+      opt.textContent = cat.nombre;
+      categoria.appendChild(opt);
+    });
+
+  } catch (err) {
+    console.error("Error cargando categorías:", err);
   }
 }
 
 
-// Cargar productos
+function editarProducto(id, nombreP, descripcionP, categoriaP, precioP, stockP) {
+  editando = true;
+  idEditando = id;
+
+  nombre.value = nombreP;
+  descripcion.value = descripcionP;
+  precio.value = precioP;
+  stock.value = stockP;
+
+  [...categoria.options].forEach(opt => {
+    if (opt.textContent === categoriaP) opt.selected = true;
+  });
+
+  msg.innerHTML = `<b>Editando producto ID ${id}</b>`;
+  msg.className = "text-primary";
+}
+
+
+async function eliminarProducto(id) {
+  if (!confirm("¿Seguro de eliminar este producto?")) return;
+
+  try {
+    const res = await fetch(`/api/proveedor/productos/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": "Bearer " + token
+      }
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      alert("Producto eliminado");
+      cargarProductos();
+    } else {
+      alert("Error: " + data.error);
+    }
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+
+
 async function cargarProductos() {
-  const res = await fetch("/api/proveedor/productos", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  const data = await res.json();
-  tabla.innerHTML = "";
-
-  if (data.ok) {
-    data.productos.forEach(p => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${p.id}</td>
-        <td>${p.nombre}</td>
-        <td>${p.descripcion}</td>
-        <td>${p.categoria_id}</td>
-        <td>${p.precio}</td>
-        <td>${p.stock}</td>
-        <td>
-          <button class="btn btn-warning btn-sm" onclick="editarProducto(${p.id})">Editar</button>
-        </td>
-      `;
-      tabla.appendChild(tr);
+  try {
+    const res = await fetch("/api/proveedor/productos", {
+      headers: { "Authorization": "Bearer " + token }
     });
+
+    const data = await res.json();
+    tabla.innerHTML = "";
+
+    if (data.ok && data.productos.length > 0) {
+      data.productos.forEach(p => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${p.id}</td>
+          <td>${p.nombre}</td>
+          <td>${p.descripcion}</td>
+          <td>${p.categoria}</td>
+          <td>$${p.precio}</td>
+          <td>${p.stock}</td>
+
+          <td>
+            <button class="btn btn-warning btn-sm"
+              onclick="editarProducto(${p.id}, '${p.nombre}', '${p.descripcion}', '${p.categoria}', ${p.precio}, ${p.stock})">
+              Editar
+            </button>
+          </td>
+
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">
+              Eliminar
+            </button>
+          </td>
+        `;
+
+        tabla.appendChild(tr);
+      });
+
+    } else {
+      tabla.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center text-muted">No hay productos</td>
+        </tr>`;
+    }
+
+  } catch (err) {
+    console.error("Error cargando productos:", err);
   }
 }
 
+
+
+
+// =========================
 // Agregar producto
+// =========================
 form.addEventListener("submit", async e => {
   e.preventDefault();
 
-  const res = await fetch("/api/proveedor/productos", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json", 
-      "Authorization": "Bearer " + token 
-    },
-    body: JSON.stringify({
-      nombre: nombre.value.trim(),
-      descripcion: descripcion.value.trim(),
-      categoria_id: parseInt(categoria.value),
-      precio: parseFloat(precio.value),
-      stock: parseInt(stock.value)
-    })
-  });
-
-  const data = await res.json();
-
-  msg.innerText = data.ok ? "Producto agregado correctamente" : "Error: " + data.error;
-  msg.className = data.ok ? "text-success" : "text-danger";
-
-  form.reset();
-  cargarProductos();
-});
-
-// =============== EDITAR PRODUCTO ===============
-
-window.editarProducto = async function(id) {
-
-  const res = await fetch("/api/proveedor/productos/" + id, {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  const data = await res.json();
-  const p = data.producto;
-
-  document.getElementById("edit_id").value = p.id;
-  document.getElementById("edit_nombre").value = p.nombre;
-  document.getElementById("edit_descripcion").value = p.descripcion;
-  document.getElementById("edit_precio").value = p.precio;
-  document.getElementById("edit_stock").value = p.stock;
-
-  // categorías
-  const select = document.getElementById("edit_categoria");
-  select.innerHTML = "";
-
-  const resCat = await fetch("/api/categorias", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  const cats = await resCat.json();
-
-  cats.categorias.forEach(c => {
-    const opt = document.createElement("option");
-    opt.value = c.id;
-    opt.textContent = c.nombre;
-    if (c.id === p.categoria_id) opt.selected = true;
-    select.appendChild(opt);
-  });
-
-  const modal = new bootstrap.Modal(document.getElementById("modalEditar"));
-  modal.show();
-};
-
-document.getElementById("btnGuardarCambios").addEventListener("click", async () => {
-
-  const id = document.getElementById("edit_id").value;
-
-  const body = {
-    nombre: document.getElementById("edit_nombre").value,
-    descripcion: document.getElementById("edit_descripcion").value,
-    categoria_id: parseInt(document.getElementById("edit_categoria").value),
-    precio: parseFloat(document.getElementById("edit_precio").value),
-    stock: parseInt(document.getElementById("edit_stock").value)
+  const datos = {
+    nombre: nombre.value.trim(),
+    descripcion: descripcion.value.trim(),
+    categoria_id: parseInt(categoria.value),
+    precio: parseFloat(precio.value),
+    stock: parseInt(stock.value)
   };
 
-  const res = await fetch("/api/proveedor/productos/" + id, {
-    method: "PUT",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
+  let url = "/api/proveedor/productos";
+  let method = "POST";
 
-  const data = await res.json();
+  if (editando) {
+    url = `/api/proveedor/productos/${idEditando}`;
+    method = "PUT";
+  }
 
-  if (data.ok) {
-    alert("Producto actualizado correctamente");
-    const modal = bootstrap.Modal.getInstance(document.getElementById("modalEditar"));
-    modal.hide();
-    cargarProductos();
-  } else {
-    alert("Error: " + data.error);
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify(datos)
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      msg.innerText = editando ? "Producto editado correctamente" : "Producto agregado";
+      msg.className = "text-success";
+
+      form.reset();
+      editando = false;
+      idEditando = null;
+      cargarProductos();
+    } else {
+      msg.innerText = "Error: " + data.error;
+      msg.className = "text-danger";
+    }
+
+  } catch (err) {
+    console.error(err);
   }
 });
 
-// Inicializar
+
+// Inicializar vista
 cargarCategorias();
 cargarProductos();
