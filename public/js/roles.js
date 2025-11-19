@@ -1,4 +1,4 @@
-const token = localStorage.getItem("token");
+const token = localStorage.getItem("token"); 
 if (!token) {
   alert("No has iniciado sesión");
   window.location.href = "/login.html";
@@ -11,9 +11,7 @@ const nombreInput = document.getElementById("nombreRol");
 const msg = document.getElementById("msg");
 const btnDashboard = document.getElementById("btnDashboard");
 
-// -------------------- Funciones --------------------
-
-// Cargar roles
+// -------------------- Funciones CRUD --------------------
 async function cargarRoles() {
   const res = await fetch("/roles", {
     headers: { "Authorization": "Bearer " + token }
@@ -35,12 +33,10 @@ async function cargarRoles() {
   }
 }
 
-// Crear rol
 form.addEventListener("submit", async e => {
   e.preventDefault();
   const nombre = nombreInput.value.trim();
   if (!nombre) return;
-
   const res = await fetch("/roles", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
@@ -53,7 +49,6 @@ form.addEventListener("submit", async e => {
   cargarRoles();
 });
 
-// Editar rol
 window.editar = async (id, nombre) => {
   const nuevoNombre = prompt("Nuevo nombre del rol:", nombre);
   if (!nuevoNombre) return;
@@ -68,7 +63,6 @@ window.editar = async (id, nombre) => {
   cargarRoles();
 };
 
-// Eliminar rol
 window.eliminar = async (id) => {
   if (!confirm("¿Seguro que deseas eliminar este rol?")) return;
   const res = await fetch(`/roles/${id}`, {
@@ -81,23 +75,29 @@ window.eliminar = async (id) => {
   cargarRoles();
 };
 
-// -------------------- Redirigir al dashboard admin --------------------
+// -------------------- Botón Dashboard seguro según rol --------------------
 btnDashboard.addEventListener("click", async () => {
   try {
     const res = await fetch("/api/perfil", {
       headers: { "Authorization": "Bearer " + token }
     });
     const data = await res.json();
-    if (data.ok && data.usuario.rol === "admin") {
+    if (!data.ok) throw new Error("Error al obtener perfil");
+
+    const rol = data.usuario.rol;
+    if (rol === "admin") {
       window.location.href = "/admin/dashboard";
+    } else if (rol === "proveedor") {
+      window.location.href = "/proveedor/dashboard";
     } else {
-      alert("No tienes permisos de administrador");
+      alert("No tienes permisos para acceder al dashboard");
     }
   } catch (err) {
     console.error(err);
     alert("Error al validar sesión");
+    window.location.href = "/login.html";
   }
 });
 
-// Inicializar
+// Inicializar tabla
 cargarRoles();

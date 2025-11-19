@@ -16,10 +16,58 @@ document.addEventListener('DOMContentLoaded',()=>{
   const token = localStorage.getItem("token");
 const payload = JSON.parse(atob(token.split(".")[1]));
 
+
+
+
 if (payload.rol !== "admin") {
   alert("No tienes permiso");
   window.location.href = "login.html";
 }
+
+
+
+// Referencias
+const nombreUsuario = document.getElementById("nombreUsuario");
+const btnRoles = document.getElementById("btnRoles");
+const btnLogout = document.getElementById("btnLogout");
+
+// Validar token y rol
+async function validarAdmin() {
+  try {
+    const res = await fetch("/api/perfil", {
+      headers: { "Authorization": "Bearer " + token }
+    });
+    const data = await res.json();
+    if (!data.ok || data.usuario.rol !== "admin") {
+      alert("No tienes permisos de administrador");
+      localStorage.removeItem("token");
+      window.location.href = "/login.html";
+      return;
+    }
+    nombreUsuario.textContent = data.usuario.nombre;
+  } catch (err) {
+    console.error(err);
+    alert("Error al validar sesión");
+    window.location.href = "/login.html";
+  }
+}
+
+// Botón roles
+btnRoles.addEventListener("click", () => {
+  window.location.href = "/admin/roles.html";
+});
+
+// Botón logout
+btnLogout.addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "/login.html";
+});
+
+validarAdmin();
+
+
+
+
 
   async function cargarCadena(){
     try{

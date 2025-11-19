@@ -15,7 +15,6 @@ const { authRequired, adminOnly, proveedorOnly } = require("./public/middlewares
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(cors({ origin: true, credentials: true }));
 app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
@@ -66,14 +65,12 @@ app.post("/api/register", async (req, res) => {
     if (!rolRow.rows.length) return res.status(400).json({ ok: false, error: "Rol inválido" });
 
     const hashed = await bcrypt.hash(password, 10);
-
     await db.query(
       `INSERT INTO usuarios(nombre,email,password,rol_id) VALUES ($1,$2,$3,$4)`,
       [nombre, email, hashed, rolRow.rows[0].id]
     );
 
     await registrarEnBlockchain("CREAR_USUARIO", { nombre, email });
-
     res.json({ ok: true, message: "Usuario registrado correctamente" });
   } catch (err) {
     console.error(err);
@@ -138,7 +135,6 @@ app.post("/api/register-proveedor", async (req, res) => {
     if (!rolRow.rows.length) return res.status(500).json({ ok: false, error: "Rol proveedor no existe" });
 
     const hashed = await bcrypt.hash(password, 10);
-
     await db.query(
       `INSERT INTO usuarios(nombre,email,password,rol_id) VALUES ($1,$2,$3,$4)`,
       [nombre, email, hashed, rolRow.rows[0].id]
@@ -215,7 +211,7 @@ app.delete("/roles/:id", authRequired, adminOnly, async (req, res) => {
 
 // Dashboard admin
 app.get("/admin/dashboard", authRequired, adminOnly, (req, res) => {
-  res.sendFile(__dirname + "/public/admin/dashboard.html");
+  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
 // --------------------- Init DB ---------------------

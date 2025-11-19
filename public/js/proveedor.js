@@ -1,18 +1,15 @@
 const token = localStorage.getItem("token");
-
 if (!token) {
   alert("No has iniciado sesión");
   window.location.href = "/login.html";
 }
 
-// Mostrar info del usuario
-fetch("/api/perfil", {
-  headers: { "Authorization": "Bearer " + token }
-})
-  .then(res => res.json())
-  .then(data => {
-    if (data.ok) document.getElementById("usuarioInfo").innerText = `Bienvenido: ${data.usuario.nombre}`;
-  });
+// Referencias
+const formProducto = document.getElementById("formProducto");
+const tablaProductos = document.getElementById("tablaProductos");
+const msg = document.getElementById("msg");
+const categoriaSelect = document.getElementById("categoria");
+const btnLogout = document.getElementById("btnLogout");
 
 // Cargar categorías
 async function cargarCategorias() {
@@ -20,22 +17,16 @@ async function cargarCategorias() {
     headers: { "Authorization": "Bearer " + token }
   });
   const data = await res.json();
-  const select = document.getElementById("categoria_id");
-  select.innerHTML = "";
+  categoriaSelect.innerHTML = "";
   if (data.ok) {
     data.categorias.forEach(c => {
-      const option = document.createElement("option");
-      option.value = c.id;
-      option.innerText = c.nombre;
-      select.appendChild(option);
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.nombre;
+      categoriaSelect.appendChild(opt);
     });
   }
 }
-
-// Llamar al inicio
-cargarCategorias();
-
-
 
 // Cargar productos del proveedor
 async function cargarProductos() {
@@ -43,45 +34,51 @@ async function cargarProductos() {
     headers: { "Authorization": "Bearer " + token }
   });
   const data = await res.json();
-  const tbody = document.querySelector("#tablaProductos tbody");
-  tbody.innerHTML = "";
+  tablaProductos.innerHTML = "";
   if (data.ok) {
     data.productos.forEach(p => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${p.id}</td><td>${p.nombre}</td><td>${p.descripcion}</td><td>${p.categoria_id}</td><td>${p.precio}</td>`;
-      tbody.appendChild(tr);
+      tr.innerHTML = `
+        <td>${p.id}</td>
+        <td>${p.nombre}</td>
+        <td>${p.descripcion}</td>
+        <td>${p.categoria_id}</td>
+        <td>${p.precio}</td>
+      `;
+      tablaProductos.appendChild(tr);
     });
   }
 }
-cargarProductos();
 
 // Guardar producto
-document.getElementById("formProducto").addEventListener("submit", async e => {
+formProducto.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const nombre = document.getElementById("nombre").value;
-  const descripcion = document.getElementById("descripcion").value;
-  const categoria_id = document.getElementById("categoria_id").value;
-  const precio = document.getElementById("precio").value;
+  const nombre = document.getElementById("nombre").value.trim();
+  const descripcion = document.getElementById("descripcion").value.trim();
+  const categoria_id = categoriaSelect.value;
+  const precio = parseFloat(document.getElementById("precio").value);
+
+  if (!nombre || !precio) return;
 
   const res = await fetch("/api/proveedor/productos", {
     method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
-    },
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
     body: JSON.stringify({ nombre, descripcion, categoria_id, precio })
   });
 
   const data = await res.json();
-  const msg = document.getElementById("msg");
-
-  if (data.ok) {
-    msg.innerText = "Producto guardado correctamente!";
-    msg.className = "text-success";
-    document.getElementById("formProducto").reset();
-    cargarProductos();
-  } else {
-    msg.innerText = "Error: " + data.error;
-    msg.className = "text-danger";
-  }
+  msg.innerText = data.ok ? "Producto guardado correctamente" : "Error: " + data.error;
+  msg.className = data.ok ? "text-success" : "text-danger";
+  formProducto.reset();
+  cargarProductos();
 });
+
+// Logout
+btnLogout.addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "/login.html";
+});
+
+// Inicializar
+cargarCategorias();
+cargarProductos();
