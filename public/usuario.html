@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Usuario</title>
+  <link rel="stylesheet" href="/css/bootstrap.min.css">
+</head>
+
+<body class="p-4">
+
+<div class="container">
+
+  <h2>Dashboard Usuario (Comprar)</h2>
+
+  <button id="btnLogout" class="btn btn-danger mb-3">Cerrar sesión</button>
+
+  <h4>Productos disponibles</h4>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Descripción</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody id="tablaProductos"></tbody>
+  </table>
+
+  <h4 class="mt-4">Carrito</h4>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Cantidad</th>
+        <th>Subtotal</th>
+      </tr>
+    </thead>
+    <tbody id="tablaCarrito"></tbody>
+  </table>
+
+  <h3 class="mt-3">Total: $<span id="total">0.00</span></h3>
+
+  <button class="btn btn-success mt-3" id="btnComprar">Registrar Venta</button>
+
+  <p id="msg" class="mt-3"></p>
+
+</div>
+
+<script src="/js/usuario.js"></script>
+</body>
+</html>

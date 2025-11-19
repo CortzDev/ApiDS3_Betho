@@ -9,14 +9,61 @@ const rateLimit = require("express-rate-limit");
 const { Pool } = require("pg");
 const jwt = require("jsonwebtoken");
 
-// Middlewares
+// ===================== HELMET CONFIGURACIÓN SEGURA =====================
+const helmetOptions = {
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'self'"],
+
+      // CSS Local + Bootstrap CDN
+      "style-src": [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://cdnjs.cloudflare.com"
+      ],
+
+      // JS Local + Bootstrap CDN
+      "script-src": [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://cdn.jsdelivr.net",
+        "https://cdnjs.cloudflare.com"
+      ],
+
+      // Imágenes locales y base64
+      "img-src": ["'self'", "data:", "blob:"],
+
+      // Conexiones API permitidas
+      "connect-src": ["'self'", "http://localhost:3000"],
+
+      // Fuentes externas
+      "font-src": [
+        "'self'",
+        "https://fonts.gstatic.com",
+        "https://cdnjs.cloudflare.com"
+      ],
+
+      "frame-src": ["'self'"],
+      "object-src": ["'none'"]
+    }
+  },
+
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false
+};
+// =======================================================================
+
 const { authRequired, adminOnly, proveedorOnly } = require("./public/middlewares/auth.js");
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: true, credentials: true }));
-app.use(helmet());
+app.use(helmet(helmetOptions));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 app.use(express.static(path.join(__dirname, "public"))); // Servir archivos estáticos
 
@@ -59,15 +106,17 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
-// Registro de usuarios
+// ===================== REGISTRO DE USUARIOS =====================
 app.post("/api/register", async (req, res) => {
   const { nombre, email, password, rol } = req.body;
   try {
     const exist = await db.query("SELECT id FROM usuarios WHERE email=$1", [email]);
-    if (exist.rows.length) return res.status(400).json({ ok: false, error: "Usuario ya existe" });
+    if (exist.rows.length)
+      return res.status(400).json({ ok: false, error: "Usuario ya existe" });
 
     const rolRow = await db.query("SELECT id FROM roles WHERE nombre=$1", [rol]);
-    if (!rolRow.rows.length) return res.status(400).json({ ok: false, error: "Rol inválido" });
+    if (!rolRow.rows.length)
+      return res.status(400).json({ ok: false, error: "Rol inválido" });
 
     const hashed = await bcrypt.hash(password, 10);
 
@@ -85,7 +134,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// Login (crea proveedor automáticamente si no existe)
+// ===================== LOGIN =====================
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -128,7 +177,7 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Perfil
+// ===================== PERFIL =====================
 app.get("/api/perfil", authRequired, async (req, res) => {
   try {
     const r = await db.query(
@@ -145,13 +194,14 @@ app.get("/api/perfil", authRequired, async (req, res) => {
   }
 });
 
-// Registro proveedor
+// ===================== REGISTRO PROVEEDOR =====================
 app.post("/api/register-proveedor", async (req, res) => {
   const { nombre, email, password, empresa, telefono, direccion } = req.body;
 
   try {
     const exist = await db.query("SELECT id FROM usuarios WHERE email=$1", [email]);
-    if (exist.rows.length) return res.status(400).json({ ok: false, error: "Email ya registrado" });
+    if (exist.rows.length)
+      return res.status(400).json({ ok: false, error: "Email ya registrado" });
 
     const rolProv = await db.query("SELECT id FROM roles WHERE nombre='proveedor'");
     const hashed = await bcrypt.hash(password, 10);
@@ -176,7 +226,7 @@ app.post("/api/register-proveedor", async (req, res) => {
   }
 });
 
-// CREAR PRODUCTO
+// ===================== PRODUCTOS PROVEEDOR =====================
 app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
   const { nombre, descripcion, categoria_id, precio } = req.body;
 
@@ -202,7 +252,7 @@ app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, re
   }
 });
 
-// LISTAR PRODUCTOS DE PROVEEDOR
+// ===================== LISTAR PRODUCTOS PROVEEDOR =====================
 app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
   try {
     const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
@@ -212,11 +262,7 @@ app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res
 
     const proveedorId = rProv.rows[0].id;
 
-    const productos = await db.query(
-      "SELECT * FROM productos WHERE proveedor_id=$1",
-      [proveedorId]
-    );
-
+    const productos = await db.query("SELECT * FROM productos WHERE proveedor_id=$1", [proveedorId]);
     res.json({ ok: true, productos: productos.rows });
 
   } catch (err) {
@@ -225,6 +271,147 @@ app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res
   }
 });
 
+// Obtener un producto del proveedor
+app.get("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
+    if (!rProv.rows.length)
+      return res.status(400).json({ ok: false, error: "Proveedor no encontrado" });
+
+    const proveedorId = rProv.rows[0].id;
+
+    const r = await db.query(
+      "SELECT * FROM productos WHERE id=$1 AND proveedor_id=$2",
+      [id, proveedorId]
+    );
+
+    if (!r.rows.length)
+      return res.status(404).json({ ok: false, error: "Producto no encontrado" });
+
+    res.json({ ok: true, producto: r.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+
+// Editar producto del proveedor
+app.put("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
+  const { id } = req.params;
+  const { nombre, descripcion, categoria_id, precio, stock } = req.body;
+
+  try {
+    const rProv = await db.query("SELECT id FROM proveedor WHERE usuario_id=$1", [req.user.id]);
+    if (!rProv.rows.length)
+      return res.status(400).json({ ok: false, error: "Proveedor no encontrado" });
+
+    const proveedorId = rProv.rows[0].id;
+
+    const rCheck = await db.query(
+      "SELECT * FROM productos WHERE id=$1 AND proveedor_id=$2",
+      [id, proveedorId]
+    );
+
+    if (!rCheck.rows.length)
+      return res.status(403).json({ ok: false, error: "No autorizado" });
+
+    await db.query(`
+      UPDATE productos
+      SET nombre=$1, descripcion=$2, categoria_id=$3, precio=$4, stock=$5
+      WHERE id=$6
+    `, [nombre, descripcion, categoria_id, precio, stock, id]);
+
+    await registrarEnBlockchain("EDITAR_PRODUCTO", {
+      producto_id: id,
+      proveedor_id: proveedorId,
+      cambios: { nombre, descripcion, categoria_id, precio, stock }
+    });
+
+    res.json({ ok: true, message: "Producto actualizado" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "Error interno" });
+  }
+});
+
+
+
+// ===================== LISTAR TODOS LOS PRODUCTOS (USUARIO) =====================
+app.get("/api/todos-productos", authRequired, async (req, res) => {
+  try {
+    const r = await db.query(`SELECT * FROM productos ORDER BY id DESC`);
+    res.json({ ok: true, productos: r.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// ===================== REGISTRO DE VENTAS (USUARIO) =====================
+app.post("/api/usuario/venta", authRequired, async (req, res) => {
+  const usuarioId = req.user.id;
+  const { productos } = req.body;
+
+  try {
+    if (!productos || productos.length === 0)
+      return res.status(400).json({ ok: false, error: "Debe enviar productos" });
+
+    const total = productos.reduce(
+      (sum, p) => sum + p.cantidad * p.precio_unitario, 0
+    );
+
+    const venta = await db.query(
+      `INSERT INTO ventas(usuario_id, total)
+       VALUES ($1,$2) RETURNING id, fecha`,
+      [usuarioId, total]
+    );
+
+    const ventaId = venta.rows[0].id;
+
+    for (const p of productos) {
+      await db.query(
+        `INSERT INTO venta_detalle(venta_id, producto_id, cantidad, precio_unitario)
+         VALUES ($1,$2,$3,$4)`,
+        [ventaId, p.producto_id, p.cantidad, p.precio_unitario]
+      );
+    }
+
+    await registrarEnBlockchain("CREAR_VENTA", {
+      venta_id: ventaId,
+      usuario_id: usuarioId,
+      total,
+      productos
+    });
+
+    res.json({ ok: true, message: "Venta registrada correctamente" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+
+// Listar productos para usuarios
+app.get("/api/productos", authRequired, async (req, res) => {
+  try {
+    const r = await db.query(
+      "SELECT id, nombre, descripcion, precio, stock FROM productos WHERE stock > 0 ORDER BY id"
+    );
+
+    res.json({ ok: true, productos: r.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "Error al obtener productos" });
+  }
+});
+
+
 // ===================== DASHBOARDS =====================
 app.get("/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "dashboard.html"));
@@ -232,6 +419,10 @@ app.get("/dashboard", (req, res) => {
 
 app.get("/proveedor/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "proveedor.html"));
+});
+
+app.get("/usuario/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "usuario.html"));
 });
 
 // --------------------- Init DB ---------------------
@@ -285,6 +476,25 @@ async function initDb() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS ventas (
+      id SERIAL PRIMARY KEY,
+      usuario_id INT NOT NULL REFERENCES usuarios(id),
+      fecha TIMESTAMP NOT NULL DEFAULT NOW(),
+      total NUMERIC(10,2) NOT NULL
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS venta_detalle (
+      id SERIAL PRIMARY KEY,
+      venta_id INT REFERENCES ventas(id),
+      producto_id INT REFERENCES productos(id),
+      cantidad INT NOT NULL,
+      precio_unitario NUMERIC(10,2) NOT NULL
+    );
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS blockchain (
       id SERIAL PRIMARY KEY,
       nonce VARCHAR(150) NOT NULL,
@@ -295,7 +505,6 @@ async function initDb() {
     );
   `);
 
-  // Inicializar roles
   const r = await db.query("SELECT COUNT(*) FROM roles");
   if (parseInt(r.rows[0].count) === 0) {
     await db.query(`
@@ -307,7 +516,9 @@ async function initDb() {
 // --------------------- Main ---------------------
 async function main() {
   await initDb();
-  app.listen(3000, () => console.log("Servidor JWT en http://localhost:3000"));
+  app.listen(3000, () =>
+    console.log("Servidor JWT levantado en http://localhost:3000")
+  );
 }
 
 main().catch(err => console.error(err));

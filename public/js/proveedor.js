@@ -7,52 +7,43 @@ if (!token || rol !== "proveedor") {
   window.location.href = "/login.html";
 }
 
-// Elementos del DOM
+// Referencias
 const tabla = document.getElementById("tablaProductos");
 const form = document.getElementById("formProducto");
 const nombre = document.getElementById("nombre");
 const descripcion = document.getElementById("descripcion");
 const categoria = document.getElementById("categoria");
 const precio = document.getElementById("precio");
+const stock = document.getElementById("stock");
 const msg = document.getElementById("msg");
 const btnLogout = document.getElementById("btnLogout");
 
-// Modal (para editar)
-const modalNombre = document.getElementById("modalNombre");
-const modalDescripcion = document.getElementById("modalDescripcion");
-const modalCategoria = document.getElementById("modalCategoria");
-const modalPrecio = document.getElementById("modalPrecio");
-const modalGuardar = document.getElementById("modalGuardar");
-let productoEditandoID = null;
-
-// Cerrar sesión
+// Logout
 btnLogout.addEventListener("click", () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("rol");
+  localStorage.clear();
   window.location.href = "/login.html";
 });
 
 // Cargar categorías
+// Cargar categorías desde la API
 async function cargarCategorias() {
   const res = await fetch("/api/categorias", {
     headers: { "Authorization": "Bearer " + token }
   });
+
   const data = await res.json();
   categoria.innerHTML = "";
-  modalCategoria.innerHTML = "";
 
   if (data.ok) {
     data.categorias.forEach(c => {
-      const opt1 = document.createElement("option");
-      opt1.value = c.id;
-      opt1.textContent = c.nombre;
-      categoria.appendChild(opt1);
-
-      const opt2 = opt1.cloneNode(true);
-      modalCategoria.appendChild(opt2);
+      const option = document.createElement("option");
+      option.value = c.id;
+      option.textContent = c.nombre;
+      categoria.appendChild(option);
     });
   }
 }
+
 
 // Cargar productos
 async function cargarProductos() {
@@ -71,10 +62,10 @@ async function cargarProductos() {
         <td>${p.nombre}</td>
         <td>${p.descripcion}</td>
         <td>${p.categoria_id}</td>
-        <td>$${p.precio}</td>
+        <td>${p.precio}</td>
+        <td>${p.stock}</td>
         <td>
           <button class="btn btn-warning btn-sm" onclick="editarProducto(${p.id})">Editar</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarProducto(${p.id})">Eliminar</button>
         </td>
       `;
       tabla.appendChild(tr);
@@ -82,100 +73,105 @@ async function cargarProductos() {
   }
 }
 
-// Crear producto
+// Agregar producto
 form.addEventListener("submit", async e => {
   e.preventDefault();
 
   const res = await fetch("/api/proveedor/productos", {
     method: "POST",
     headers: { 
-      "Content-Type": "application/json",
+      "Content-Type": "application/json", 
       "Authorization": "Bearer " + token 
     },
     body: JSON.stringify({
       nombre: nombre.value.trim(),
       descripcion: descripcion.value.trim(),
       categoria_id: parseInt(categoria.value),
-      precio: parseFloat(precio.value)
+      precio: parseFloat(precio.value),
+      stock: parseInt(stock.value)
     })
   });
 
   const data = await res.json();
+
   msg.innerText = data.ok ? "Producto agregado correctamente" : "Error: " + data.error;
   msg.className = data.ok ? "text-success" : "text-danger";
 
-  if (data.ok) {
-    form.reset();
-    cargarProductos();
-  }
+  form.reset();
+  cargarProductos();
 });
 
-// ➤ ABRIR MODAL DE EDICIÓN
-window.editarProducto = async function(id) {
-  productoEditandoID = id;
+// =============== EDITAR PRODUCTO ===============
 
-  const res = await fetch("/api/proveedor/productos", {
+window.editarProducto = async function(id) {
+
+  const res = await fetch("/api/proveedor/productos/" + id, {
     headers: { "Authorization": "Bearer " + token }
   });
 
   const data = await res.json();
-  const prod = data.productos.find(x => x.id === id);
+  const p = data.producto;
 
-  if (!prod) return alert("Producto no encontrado");
+  document.getElementById("edit_id").value = p.id;
+  document.getElementById("edit_nombre").value = p.nombre;
+  document.getElementById("edit_descripcion").value = p.descripcion;
+  document.getElementById("edit_precio").value = p.precio;
+  document.getElementById("edit_stock").value = p.stock;
 
-  modalNombre.value = prod.nombre;
-  modalDescripcion.value = prod.descripcion;
-  modalCategoria.value = prod.categoria_id;
-  modalPrecio.value = prod.precio;
+  // categorías
+  const select = document.getElementById("edit_categoria");
+  select.innerHTML = "";
+
+  const resCat = await fetch("/api/categorias", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+
+  const cats = await resCat.json();
+
+  cats.categorias.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.nombre;
+    if (c.id === p.categoria_id) opt.selected = true;
+    select.appendChild(opt);
+  });
 
   const modal = new bootstrap.Modal(document.getElementById("modalEditar"));
   modal.show();
 };
 
-// ➤ GUARDAR CAMBIOS
-modalGuardar.addEventListener("click", async () => {
-  if (!productoEditandoID) return;
+document.getElementById("btnGuardarCambios").addEventListener("click", async () => {
 
-  const res = await fetch(`/api/proveedor/productos/${productoEditandoID}`, {
+  const id = document.getElementById("edit_id").value;
+
+  const body = {
+    nombre: document.getElementById("edit_nombre").value,
+    descripcion: document.getElementById("edit_descripcion").value,
+    categoria_id: parseInt(document.getElementById("edit_categoria").value),
+    precio: parseFloat(document.getElementById("edit_precio").value),
+    stock: parseInt(document.getElementById("edit_stock").value)
+  };
+
+  const res = await fetch("/api/proveedor/productos/" + id, {
     method: "PUT",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      nombre: modalNombre.value.trim(),
-      descripcion: modalDescripcion.value.trim(),
-      categoria_id: parseInt(modalCategoria.value),
-      precio: parseFloat(modalPrecio.value)
-    })
-  });
-
-  const data = await res.json();
-  if (!data.ok) return alert("Error: " + data.error);
-
-  const modal = bootstrap.Modal.getInstance(document.getElementById("modalEditar"));
-  modal.hide();
-
-  cargarProductos();
-});
-
-// ➤ ELIMINAR PRODUCTO
-window.eliminarProducto = async function(id) {
-  if (!confirm("¿Eliminar producto?")) return;
-
-  const res = await fetch(`/api/proveedor/productos/${id}`, {
-    method: "DELETE",
-    headers: { "Authorization": "Bearer " + token }
+    body: JSON.stringify(body)
   });
 
   const data = await res.json();
 
   if (data.ok) {
+    alert("Producto actualizado correctamente");
+    const modal = bootstrap.Modal.getInstance(document.getElementById("modalEditar"));
+    modal.hide();
     cargarProductos();
   } else {
     alert("Error: " + data.error);
   }
-};
+});
 
 // Inicializar
 cargarCategorias();

@@ -38,6 +38,8 @@ form.addEventListener("submit", async e => {
         window.location.href = "/proveedor/dashboard";
       } else if (data.usuario.rol === "admin") {
         window.location.href = "/dashboard";
+      } else if (data.usuario.rol === "usuario") {
+        window.location.href = "/usuario/dashboard";
       } else {
         msg.innerText = "Rol no permitido";
         msg.className = "text-danger";
