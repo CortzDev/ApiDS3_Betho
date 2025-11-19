@@ -1,22 +1,37 @@
-document.getElementById("formLogin").addEventListener("submit", async (e) => {
-    e.preventDefault();
+const form = document.getElementById("loginForm");
 
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  
+  const email = form.email.value.trim();
+  const password = form.password.value.trim();
+
+  if (!email || !password) return;
+
+  try {
     const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            email: email.value,
-            password: password.value
-        })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
     });
+    const data = await res.json();
 
-    const json = await res.json();
+    if (data.ok) {
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("rol", data.usuario.rol);
 
-    if (json.ok) {
-        localStorage.setItem("token", json.token);
-        msg.textContent = "Login correcto";
-        window.location.href = "roles.html";
+      if (data.usuario.rol === "proveedor") {
+        window.location.href = "/proveedor/dashboard";
+      } else if (data.usuario.rol === "admin") {
+        window.location.href = "/dashboard";
+      } else {
+        alert("Rol no permitido");
+      }
     } else {
-        msg.textContent = "Credenciales incorrectas";
+      alert("Usuario o contraseña incorrectos");
     }
+  } catch (err) {
+    console.error(err);
+    alert("Error de conexión");
+  }
 });

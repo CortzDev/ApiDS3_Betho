@@ -1,15 +1,28 @@
+// Token y rol
 const token = localStorage.getItem("token");
-if (!token) {
-  alert("No has iniciado sesión");
+const rol = localStorage.getItem("rol");
+
+if (!token || rol !== "proveedor") {
+  alert("No autorizado");
   window.location.href = "/login.html";
 }
 
 // Referencias
-const formProducto = document.getElementById("formProducto");
-const tablaProductos = document.getElementById("tablaProductos");
+const tabla = document.getElementById("tablaProductos");
+const form = document.getElementById("formProducto");
+const nombre = document.getElementById("nombre");
+const descripcion = document.getElementById("descripcion");
+const categoria = document.getElementById("categoria");
+const precio = document.getElementById("precio");
 const msg = document.getElementById("msg");
-const categoriaSelect = document.getElementById("categoria");
 const btnLogout = document.getElementById("btnLogout");
+
+// Cerrar sesión
+btnLogout.addEventListener("click", () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("rol");
+  window.location.href = "/login.html";
+});
 
 // Cargar categorías
 async function cargarCategorias() {
@@ -17,24 +30,24 @@ async function cargarCategorias() {
     headers: { "Authorization": "Bearer " + token }
   });
   const data = await res.json();
-  categoriaSelect.innerHTML = "";
+  categoria.innerHTML = "";
   if (data.ok) {
     data.categorias.forEach(c => {
-      const opt = document.createElement("option");
-      opt.value = c.id;
-      opt.textContent = c.nombre;
-      categoriaSelect.appendChild(opt);
+      const option = document.createElement("option");
+      option.value = c.id;
+      option.textContent = c.nombre;
+      categoria.appendChild(option);
     });
   }
 }
 
-// Cargar productos del proveedor
+// Cargar productos
 async function cargarProductos() {
   const res = await fetch("/api/proveedor/productos", {
     headers: { "Authorization": "Bearer " + token }
   });
   const data = await res.json();
-  tablaProductos.innerHTML = "";
+  tabla.innerHTML = "";
   if (data.ok) {
     data.productos.forEach(p => {
       const tr = document.createElement("tr");
@@ -45,38 +58,29 @@ async function cargarProductos() {
         <td>${p.categoria_id}</td>
         <td>${p.precio}</td>
       `;
-      tablaProductos.appendChild(tr);
+      tabla.appendChild(tr);
     });
   }
 }
 
-// Guardar producto
-formProducto.addEventListener("submit", async (e) => {
+// Agregar producto
+form.addEventListener("submit", async e => {
   e.preventDefault();
-  const nombre = document.getElementById("nombre").value.trim();
-  const descripcion = document.getElementById("descripcion").value.trim();
-  const categoria_id = categoriaSelect.value;
-  const precio = parseFloat(document.getElementById("precio").value);
-
-  if (!nombre || !precio) return;
-
   const res = await fetch("/api/proveedor/productos", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
-    body: JSON.stringify({ nombre, descripcion, categoria_id, precio })
+    body: JSON.stringify({
+      nombre: nombre.value.trim(),
+      descripcion: descripcion.value.trim(),
+      categoria_id: parseInt(categoria.value),
+      precio: parseFloat(precio.value)
+    })
   });
-
   const data = await res.json();
-  msg.innerText = data.ok ? "Producto guardado correctamente" : "Error: " + data.error;
+  msg.innerText = data.ok ? "Producto agregado correctamente" : "Error: " + data.error;
   msg.className = data.ok ? "text-success" : "text-danger";
-  formProducto.reset();
+  form.reset();
   cargarProductos();
-});
-
-// Logout
-btnLogout.addEventListener("click", () => {
-  localStorage.removeItem("token");
-  window.location.href = "/login.html";
 });
 
 // Inicializar

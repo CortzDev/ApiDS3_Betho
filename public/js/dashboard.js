@@ -54,7 +54,7 @@ async function validarAdmin() {
 
 // Botón roles
 btnRoles.addEventListener("click", () => {
-  window.location.href = "/admin/roles.html";
+  window.location.href = "./public/roles.html";
 });
 
 // Botón logout

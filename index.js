@@ -210,8 +210,13 @@ app.delete("/roles/:id", authRequired, adminOnly, async (req, res) => {
 });
 
 // Dashboard admin
-app.get("/admin/dashboard", authRequired, adminOnly, (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
+app.get("/dashboard", authRequired, adminOnly, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "dashboard.html"));
+});
+
+// Dashboard proveedor
+app.get("/proveedor/dashboard", authRequired, proveedorOnly, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "proveedor.html"));
 });
 
 // --------------------- Init DB ---------------------
