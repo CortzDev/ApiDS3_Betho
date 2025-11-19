@@ -1,32 +1,31 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
-  const msgEl = document.getElementById('msg');
-  const registerBtn = document.getElementById('registerBtn');
-  const loginBtn = document.getElementById('loginBtn');
+document.getElementById("formRegistro").addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-  registerBtn.addEventListener('click', async () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
-    try{
-      const res = await fetch('/register',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email,password })
-      });
-      const j = await res.json();
-      if(!j.ok){ msgEl.className='text-danger'; msgEl.innerText=j.error; return; }
-      msgEl.className='text-success';
-      msgEl.innerText='Registro exitoso. Verifica tu correo';
-      setTimeout(()=>{ location.href='verify.html'; }, 1000);
-    }catch(err){
-      msgEl.className='text-danger';
-      msgEl.innerText='Error en registro';
-      console.error(err);
+    const nombre = document.getElementById("nombre").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const rol_id = document.getElementById("rol").value;
+
+    const res = await fetch("/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre, email, password, rol_id })
+    });
+
+    const data = await res.json();
+
+    const msg = document.getElementById("msg");
+
+    if (data.ok) {
+        msg.innerHTML = "Registro exitoso. Redirigiendo...";
+        msg.style.color = "green";
+
+        setTimeout(() => {
+            window.location.href = "login.html";
+        }, 1500);
+
+    } else {
+        msg.innerHTML = data.error || "Error al registrar";
+        msg.style.color = "red";
     }
-  });
-
-  loginBtn.addEventListener('click',()=>{ location.href='login.html'; });
 });
-
-

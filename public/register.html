@@ -1,37 +1,51 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Registro</title>
-<link rel="stylesheet" href="css/bootstrap.min.css">
+    <meta charset="UTF-8">
+    <title>Registrarse</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
 </head>
-<body class="p-4">
-<div class="container">
-<h1>Registro</h1>
-<div id="msg" class="mb-3"></div>
-<form id="registerForm">
-  <div class="mb-3">
-    <input type="email" id="email" class="form-control" placeholder="Email">
-  </div>
-  <div class="mb-3">
-    <input type="password" id="password" class="form-control" placeholder="Password">
-  </div>
-  <button type="submit" class="btn btn-success">Registrar</button>
-</form>
-<script>
-document.getElementById('registerForm').addEventListener('submit', async e=>{
-  e.preventDefault();
-  const email=document.getElementById('email').value;
-  const password=document.getElementById('password').value;
-  const res=await fetch('/register',{method:'POST',headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password})});
-  const data=await res.json();
-  const msg=document.getElementById('msg');
-  if(data.ok){ msg.className='text-success'; msg.innerText=data.message; }
-  else { msg.className='text-danger'; msg.innerText=data.error; }
-});
-</script>
-<script src="js/bootstrap.bundle.min.js"></script>
+<body class="bg-light">
+
+<div class="container mt-5">
+    <div class="card p-4 shadow">
+        <h3 class="text-center mb-4">Crear Cuenta</h3>
+
+        <form id="formRegistro">
+            <div class="mb-3">
+                <label>Nombre</label>
+                <input type="text" id="nombre" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label>Email</label>
+                <input type="email" id="email" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label>Contraseña</label>
+                <input type="password" id="password" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label>Rol</label>
+                <select id="rol" class="form-control" required>
+                    <option value="1">Usuario</option>
+                    <option value="2">Administrador</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Registrar</button>
+        </form>
+
+        <div class="text-center mt-3">
+            <a href="login.html">¿Ya tienes cuenta? Inicia sesión</a>
+        </div>
+
+        <p id="msg" class="text-center mt-3"></p>
+    </div>
 </div>
+
+<script src="js/register.js"></script>
 </body>
 </html>

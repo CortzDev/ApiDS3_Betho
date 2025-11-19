@@ -7,75 +7,21 @@
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-dark bg-primary">
+<nav class="navbar bg-primary navbar-dark">
   <div class="container-fluid">
     <span class="navbar-brand">Panel Usuario</span>
-    <button class="btn btn-danger" onclick="logout()">Cerrar Sesión</button>
+    <button id="btnLogout" class="btn btn-danger">Salir</button>
   </div>
 </nav>
 
 <div class="container py-4">
+  <h3>Bienvenido Usuario</h3>
+  <p>Puedes registrar categorías y productos.</p>
 
-  <h3>Productos</h3>
-  <table class="table table-striped">
-    <thead class="table-dark">
-      <tr><th>ID</th><th>Nombre</th><th>Precio</th><th>Stock</th></tr>
-    </thead>
-    <tbody id="listaProductos"></tbody>
-  </table>
-
-  <hr>
-
-  <h3>Categorías</h3>
-  <table class="table table-bordered">
-    <thead class="table-dark">
-      <tr><th>ID</th><th>Nombre</th><th>Descripción</th></tr>
-    </thead>
-    <tbody id="listaCategorias"></tbody>
-  </table>
+  <a href="admin.html" class="text-danger">⚠️ ERES ADMIN? Haz clic aquí solo si tienes permiso</a>
 
 </div>
 
-<script>
-async function logout() {
-  await fetch('/logout', { method: 'POST' });
-  location.href = '/login.html';
-}
-
-async function cargarProductos() {
-  const r = await fetch('/productos');
-  const data = await r.json();
-  let html = "";
-  data.productos.forEach(p => {
-    html += `<tr>
-      <td>${p.id}</td>
-      <td>${p.nombre}</td>
-      <td>$${p.precio}</td>
-      <td>${p.stock}</td>
-    </tr>`;
-  });
-  document.getElementById("listaProductos").innerHTML = html;
-}
-
-async function cargarCategorias() {
-  const r = await fetch('/categorias');
-  const data = await r.json();
-  let html = "";
-
-  data.categorias.forEach(c => {
-    html += `<tr>
-      <td>${c.id}</td>
-      <td>${c.nombre}</td>
-      <td>${c.descripcion}</td>
-    </tr>`;
-  });
-
-  document.getElementById("listaCategorias").innerHTML = html;
-}
-
-cargarProductos();
-cargarCategorias();
-</script>
-
+<script src="js/usuario.js"></script>
 </body>
 </html>

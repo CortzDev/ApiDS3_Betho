@@ -1,39 +1,32 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
-  const msgEl = document.getElementById('msg');
-  const loginBtn = document.getElementById('loginBtn');
-  const registerBtn = document.getElementById('registerBtn');
+document.getElementById("formLogin").addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-  loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value;
-    const password = passwordInput.value;
+    const email = document.getElementById("emailLogin").value;
+    const password = document.getElementById("passwordLogin").value;
 
-    try {
-      const res = await fetch('/login', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
-      });
-      const j = await res.json();
-      if(!j.ok){ 
-        msgEl.className='text-danger'; 
-        msgEl.innerText=j.error; 
-        return; 
-      }
+    });
 
-      localStorage.setItem('token', j.token);
-      msgEl.className='text-success';
-      msgEl.innerText='Inicio de sesión exitoso';
-      setTimeout(()=>{ location.href='dashboard.html'; }, 1000);
-    } catch(err){
-      msgEl.className='text-danger';
-      msgEl.innerText='Error al iniciar sesión';
-      console.error(err);
+    const data = await res.json();
+    const msg = document.getElementById("msgLogin");
+
+    if (!data.ok) {
+        msg.innerHTML = data.error;
+        msg.style.color = "red";
+        return;
     }
-  });
 
-  registerBtn.addEventListener('click', () => {
-    location.href='index.html';
-  });
+    // Guardar token
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("rol_id", data.rol_id);
+
+    msg.innerHTML = "Ingresando...";
+    msg.style.color = "green";
+
+    // Redirección según rol
+    if (data.rol_id == 2) window.location.href = "admin.html";
+    else window.location.href = "usuario.html";
 });

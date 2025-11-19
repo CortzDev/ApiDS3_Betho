@@ -1,81 +1,40 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login</title>
-<link rel="stylesheet" href="css/bootstrap.min.css">
-
-<style>
-    body {
-        background: #f5f7fa;
-    }
-    .login-card {
-        max-width: 420px;
-        margin: auto;
-        margin-top: 80px;
-        padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 4px 18px rgba(0,0,0,0.10);
-        background: #fff;
-    }
-</style>
-
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
 </head>
 
-<body>
+<body class="bg-light">
 
-<div class="container">
+<div class="container mt-5">
+    <div class="card p-4 shadow">
+        <h3 class="text-center mb-4">Iniciar Sesión</h3>
 
-    <div class="login-card">
-
-        <h2 class="text-center mb-4">Login</h2>
-        <div id="msg" class="mb-3 text-center"></div>
-
-        <form id="loginForm">
-
+        <form id="formLogin">
             <div class="mb-3">
-                <input type="email" id="email" class="form-control" placeholder="Email">
+                <label>Email</label>
+                <input type="email" id="emailLogin" class="form-control" required>
             </div>
 
             <div class="mb-3">
-                <input type="password" id="password" class="form-control" placeholder="Password">
+                <label>Contraseña</label>
+                <input type="password" id="passwordLogin" class="form-control" required>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-
+            <button type="submit" class="btn btn-success w-100">Ingresar</button>
         </form>
 
-    </div>
+        <p id="msgLogin" class="text-center mt-3"></p>
 
+        <div class="text-center mt-3">
+            <a href="registrar.html">Crear cuenta</a>
+        </div>
+    </div>
 </div>
 
-<script>
-document.getElementById('loginForm').addEventListener('submit', async e=>{
-  e.preventDefault();
-
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-
-  const res = await fetch('/login',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({email,password})
-  });
-
-  const data = await res.json();
-  const msg = document.getElementById('msg');
-
-  if(data.ok){
-    location.href = 'dashboard.html';
-  } else {
-    msg.className = 'text-danger';
-    msg.innerText = data.error;
-  }
-});
-</script>
-
-<script src="js/bootstrap.bundle.min.js"></script>
+<script src="js/login.js"></script>
 
 </body>
 </html>
