@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel Administrador</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container-fluid">
+    <span class="navbar-brand">Panel Administrador</span>
+    <button id="btnLogout" class="btn btn-danger">Cerrar Sesión</button>
+  </div>
+</nav>
+
+<div class="container py-4">
+
+  <!-- PRODUCTOS -->
+  <h3 class="mb-3">Productos</h3>
+  <button id="btnNuevoProducto" class="btn btn-primary mb-2" data-bs-toggle="modal" data-bs-target="#modalProducto">
+    Nuevo Producto
+  </button>
+
+  <table class="table table-bordered">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th><th>Nombre</th><th>Precio</th><th>Stock</th>
+      </tr>
+    </thead>
+    <tbody id="listaProductos"></tbody>
+  </table>
+
+  <hr>
+
+  <!-- CATEGORIAS -->
+  <h3 class="mb-3">Categorías</h3>
+  <button id="btnNuevaCategoria" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalCategoria">
+    Nueva Categoría
+  </button>
+
+  <table class="table table-striped">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th><th>Nombre</th><th>Descripción</th>
+      </tr>
+    </thead>
+    <tbody id="listaCategorias"></tbody>
+  </table>
+
+  <hr>
+
+  <!-- BLOCKCHAIN -->
+  <h3>Blockchain</h3>
+  <button id="btnRecargarBlockchain" class="btn btn-success mb-2">Recargar</button>
+  <pre id="blockchain" class="bg-dark text-success p-3 rounded" style="height:250px; overflow:auto;"></pre>
+
+</div>
+
+<!-- MODALES ===================================================== -->
+
+<!-- MODAL PRODUCTO -->
+<div class="modal fade" id="modalProducto" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white"><h5>Nuevo Producto</h5></div>
+      <div class="modal-body">
+        <input id="p_nombre" class="form-control mb-2" placeholder="Nombre">
+        <input id="p_desc" class="form-control mb-2" placeholder="Descripción">
+        <input id="p_precio" type="number" class="form-control mb-2" placeholder="Precio">
+        <input id="p_stock" type="number" class="form-control mb-2" placeholder="Stock">
+        <select id="p_categoria" class="form-control mb-2"></select>
+      </div>
+      <div class="modal-footer">
+        <button id="btnGuardarProducto" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORIA -->
+<div class="modal fade" id="modalCategoria" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-secondary text-white"><h5>Nueva Categoría</h5></div>
+      <div class="modal-body">
+        <input id="c_nombre" class="form-control mb-2" placeholder="Nombre">
+        <input id="c_desc" class="form-control mb-2" placeholder="Descripción">
+      </div>
+      <div class="modal-footer">
+        <button id="btnGuardarCategoria" class="btn btn-secondary">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/admin.js"></script>
+ <script src="js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

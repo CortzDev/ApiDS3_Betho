@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel Usuario</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-primary">
+  <div class="container-fluid">
+    <span class="navbar-brand">Panel Usuario</span>
+    <button class="btn btn-danger" onclick="logout()">Cerrar Sesión</button>
+  </div>
+</nav>
+
+<div class="container py-4">
+
+  <h3>Productos</h3>
+  <table class="table table-striped">
+    <thead class="table-dark">
+      <tr><th>ID</th><th>Nombre</th><th>Precio</th><th>Stock</th></tr>
+    </thead>
+    <tbody id="listaProductos"></tbody>
+  </table>
+
+  <hr>
+
+  <h3>Categorías</h3>
+  <table class="table table-bordered">
+    <thead class="table-dark">
+      <tr><th>ID</th><th>Nombre</th><th>Descripción</th></tr>
+    </thead>
+    <tbody id="listaCategorias"></tbody>
+  </table>
+
+</div>
+
+<script>
+async function logout() {
+  await fetch('/logout', { method: 'POST' });
+  location.href = '/login.html';
+}
+
+async function cargarProductos() {
+  const r = await fetch('/productos');
+  const data = await r.json();
+  let html = "";
+  data.productos.forEach(p => {
+    html += `<tr>
+      <td>${p.id}</td>
+      <td>${p.nombre}</td>
+      <td>$${p.precio}</td>
+      <td>${p.stock}</td>
+    </tr>`;
+  });
+  document.getElementById("listaProductos").innerHTML = html;
+}
+
+async function cargarCategorias() {
+  const r = await fetch('/categorias');
+  const data = await r.json();
+  let html = "";
+
+  data.categorias.forEach(c => {
+    html += `<tr>
+      <td>${c.id}</td>
+      <td>${c.nombre}</td>
+      <td>${c.descripcion}</td>
+    </tr>`;
+  });
+
+  document.getElementById("listaCategorias").innerHTML = html;
+}
+
+cargarProductos();
+cargarCategorias();
+</script>
+
+</body>
+</html>
