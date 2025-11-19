@@ -1,105 +1,130 @@
-// ============================
-// EVENTOS
-// ============================
+const API = "http://localhost:3000"; // ajusta si usas otro puerto
+const token = localStorage.getItem("token");
 
-document.addEventListener("DOMContentLoaded", () => {
+// Si no hay token, enviar al login
+if (!token) {
+  window.location.href = "login.html";
+}
 
-  cargarProductos();
-  cargarCategorias();
-  cargarBlockchain();
+// Mostrar roles al hacer clic en el menú
+document.getElementById("linkRoles").addEventListener("click", () => {
+  document.getElementById("rolesSection").style.display = "block";
+  cargarRoles();
+});
 
-  document.getElementById("btnLogout").addEventListener("click", logout);
+// Cerrar sesión
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "login.html";
+});
 
-  document.getElementById("btnGuardarProducto").addEventListener("click", crearProducto);
-  document.getElementById("btnGuardarCategoria").addEventListener("click", crearCategoria);
+// ------------------------------------------------------
+// Cargar contadores
+// ------------------------------------------------------
+async function cargarContadores() {
+  try {
+    const res = await fetch(`${API}/admin/dashboard`, {
+      headers: { "Authorization": "Bearer " + token }
+    });
 
-  document.getElementById("btnRecargarBlockchain").addEventListener("click", cargarBlockchain);
+    const data = await res.json();
 
+    document.getElementById("countUsuarios").innerText = data.usuarios;
+    document.getElementById("countRoles").innerText = data.roles;
+    document.getElementById("countActividad").innerText = data.actividad;
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+cargarContadores();
+
+// ------------------------------------------------------
+// CRUD ROLES (USANDO JWT)
+// ------------------------------------------------------
+async function cargarRoles() {
+  try {
+    const res = await fetch(`${API}/roles`, {
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    const roles = await res.json();
+    const tbody = document.getElementById("tablaRoles");
+
+    tbody.innerHTML = "";
+
+    roles.forEach(r => {
+      tbody.innerHTML += `
+        <tr>
+          <td>${r.id}</td>
+          <td>${r.nombre}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="editarRol(${r.id}, '${r.nombre}')">Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminarRol(${r.id})">Eliminar</button>
+          </td>
+        </tr>
+      `;
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+window.editarRol = function(id, nombre) {
+  document.getElementById("rolId").value = id;
+  document.getElementById("rolNombre").value = nombre;
+  document.getElementById("msgRol").innerText = "";
+  new bootstrap.Modal(document.getElementById("modalRol")).show();
+};
+
+window.eliminarRol = async function(id) {
+  if (!confirm("¿Eliminar este rol?")) return;
+
+  try {
+    await fetch(`${API}/roles/${id}`, {
+      method: "DELETE",
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    cargarRoles();
+  } catch (err) {
+    console.error(err);
+  }
+};
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem("token");
+  window.location.href = "login.html";
 });
 
 
-// ============================
-// FUNCIONES PRINCIPALES
-// ============================
+document.getElementById("guardarRolBtn").addEventListener("click", async () => {
+  const id = document.getElementById("rolId").value;
+  const nombre = document.getElementById("rolNombre").value;
 
-async function logout() {
-  await fetch('/logout', { method: 'POST' });
-  location.href = '/login.html';
-}
+  if (nombre.trim() === "") {
+    document.getElementById("msgRol").innerText = "El nombre es obligatorio.";
+    return;
+  }
 
-async function cargarProductos() {
-  const r = await fetch('/productos');
-  const data = await r.json();
+  const metodo = id ? "PUT" : "POST";
+  const url = id ? `${API}/roles/${id}` : `${API}/roles`;
 
-  let html = "";
-  data.productos.forEach(p => {
-    html += `
-      <tr>
-        <td>${p.id}</td>
-        <td>${p.nombre}</td>
-        <td>$${p.precio}</td>
-        <td>${p.stock}</td>
-      </tr>`;
-  });
+  try {
+    await fetch(url, {
+      method: metodo,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({ nombre })
+    });
 
-  document.getElementById("listaProductos").innerHTML = html;
-}
+    document.getElementById("msgRol").innerText = "Guardado correctamente.";
+    cargarRoles();
 
-async function cargarCategorias() {
-  const r = await fetch('/categorias');
-  const data = await r.json();
-
-  let html = "";
-  let opciones = "";
-
-  data.categorias.forEach(c => {
-    html += `
-      <tr>
-        <td>${c.id}</td>
-        <td>${c.nombre}</td>
-        <td>${c.descripcion}</td>
-      </tr>`;
-
-    opciones += `<option value="${c.id}">${c.nombre}</option>`;
-  });
-
-  document.getElementById("listaCategorias").innerHTML = html;
-  document.getElementById("p_categoria").innerHTML = opciones;
-}
-
-async function crearProducto() {
-  await fetch('/productos', {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      nombre: p_nombre.value,
-      descripcion: p_desc.value,
-      precio: p_precio.value,
-      stock: p_stock.value,
-      categoria_id: p_categoria.value
-    })
-  });
-
-  location.reload();
-}
-
-async function crearCategoria() {
-  await fetch('/categorias', {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      nombre: c_nombre.value,
-      descripcion: c_desc.value
-    })
-  });
-
-  location.reload();
-}
-
-async function cargarBlockchain() {
-  const r = await fetch('/blockchain');
-  const data = await r.json();
-
-  document.getElementById("blockchain").innerText =
-    JSON.stringify(data.blockchain, null, 2);
-}
+  } catch (err) {
+    console.error(err);
+  }
+});

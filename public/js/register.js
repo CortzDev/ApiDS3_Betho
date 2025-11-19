@@ -1,31 +1,39 @@
-document.getElementById("formRegistro").addEventListener("submit", async (e) => {
-    e.preventDefault();
+document.addEventListener("DOMContentLoaded", () => {
 
-    const nombre = document.getElementById("nombre").value;
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    const rol_id = document.getElementById("rol").value;
-
-    const res = await fetch("/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, email, password, rol_id })
-    });
-
-    const data = await res.json();
-
+    const form = document.getElementById("formRegister");
     const msg = document.getElementById("msg");
 
-    if (data.ok) {
-        msg.innerHTML = "Registro exitoso. Redirigiendo...";
-        msg.style.color = "green";
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
 
-        setTimeout(() => {
-            window.location.href = "login.html";
-        }, 1500);
+        const data = {
+            nombre: document.getElementById("nombre").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            password: document.getElementById("password").value.trim(),
+            rol: document.getElementById("rol").value.trim()
+        };
 
-    } else {
-        msg.innerHTML = data.error || "Error al registrar";
-        msg.style.color = "red";
-    }
+        try {
+            const res = await fetch("http://localhost:3000/api/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            const json = await res.json();
+
+            if (!res.ok) {
+                msg.innerHTML = `<div class="alert alert-danger">${json.error || json.message}</div>`;
+                return;
+            }
+
+            msg.innerHTML = `<div class="alert alert-success">${json.message}</div>`;
+            form.reset();
+
+        } catch (err) {
+            msg.innerHTML = `<div class="alert alert-danger">Error del servidor</div>`;
+        }
+    });
+
 });
+

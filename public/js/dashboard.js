@@ -12,6 +12,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   const detalleHash = document.getElementById('detalleHash');
   const detalleValido = document.getElementById('detalleValido');
 
+
+  const token = localStorage.getItem("token");
+const payload = JSON.parse(atob(token.split(".")[1]));
+
+if (payload.rol !== "admin") {
+  alert("No tienes permiso");
+  window.location.href = "login.html";
+}
+
   async function cargarCadena(){
     try{
       const res=await fetch('/bloques',{credentials:'include'});

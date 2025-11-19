@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CRUD Roles</title>
+  <link rel="stylesheet" href="../css/bootstrap.min.css">
+</head>
+<body class="p-4">
+
+<div class="container">
+  <h2>Gestión de Roles</h2>
+
+  <form id="formRol">
+    <div class="mb-3">
+      <label>Nombre del rol</label>
+      <input type="text" class="form-control" id="nombreRol" required>
+    </div>
+    <button class="btn btn-primary" id="btnCrear">Crear Rol</button>
+  </form>
+
+  <hr>
+
+  <h3>Listado</h3>
+  <table class="table table-bordered">
+    <thead>
+      <tr><th>ID</th><th>Nombre</th><th>Acciones</th></tr>
+    </thead>
+    <tbody id="tablaRoles"></tbody>
+  </table>
+
+  <p id="msg"></p>
+</div>
+
+<script src="../js/roles.js"></script>
+</body>
+</html>

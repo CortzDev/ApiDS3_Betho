@@ -1,32 +1,22 @@
 document.getElementById("formLogin").addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const email = document.getElementById("emailLogin").value;
-    const password = document.getElementById("passwordLogin").value;
-
-    const res = await fetch("/login", {
+    const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+            email: email.value,
+            password: password.value
+        })
     });
 
-    const data = await res.json();
-    const msg = document.getElementById("msgLogin");
+    const json = await res.json();
 
-    if (!data.ok) {
-        msg.innerHTML = data.error;
-        msg.style.color = "red";
-        return;
+    if (json.ok) {
+        localStorage.setItem("token", json.token);
+        msg.textContent = "Login correcto";
+        window.location.href = "roles.html";
+    } else {
+        msg.textContent = "Credenciales incorrectas";
     }
-
-    // Guardar token
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("rol_id", data.rol_id);
-
-    msg.innerHTML = "Ingresando...";
-    msg.style.color = "green";
-
-    // Redirección según rol
-    if (data.rol_id == 2) window.location.href = "admin.html";
-    else window.location.href = "usuario.html";
 });
