@@ -15,13 +15,13 @@ const btnComprar = document.getElementById("btnComprar");
 
 let carrito = [];
 
-// Logout
+// ================= LOGOUT =================
 btnLogout.addEventListener("click", () => {
   localStorage.clear();
   window.location.href = "/login.html";
 });
 
-// Cargar productos disponibles
+// ================= CARGAR PRODUCTOS =================
 async function cargarProductos() {
   const res = await fetch("/api/productos", {
     headers: { "Authorization": "Bearer " + token }
@@ -40,7 +40,11 @@ async function cargarProductos() {
         <td>$${p.precio}</td>
         <td>${p.stock}</td>
         <td>
-          <button class="btn btn-primary btn-sm" onclick="agregarCarrito(${p.id}, '${p.nombre}', ${p.precio}, ${p.stock})">
+          <button class="btn btn-primary btn-sm btn-agregar"
+                  data-id="${p.id}"
+                  data-nombre="${p.nombre}"
+                  data-precio="${p.precio}"
+                  data-stock="${p.stock}">
             Agregar
           </button>
         </td>
@@ -51,7 +55,20 @@ async function cargarProductos() {
   }
 }
 
-window.agregarCarrito = function (id, nombre, precio, stock) {
+// ================= AGREGAR AL CARRITO =================
+// Reemplaza onclick con addEventListener para CSP
+document.addEventListener("click", e => {
+  if (e.target.classList.contains("btn-agregar")) {
+    const id = parseInt(e.target.dataset.id);
+    const nombre = e.target.dataset.nombre;
+    const precio = parseFloat(e.target.dataset.precio);
+    const stock = parseInt(e.target.dataset.stock);
+
+    agregarCarrito(id, nombre, precio, stock);
+  }
+});
+
+function agregarCarrito(id, nombre, precio, stock) {
   const item = carrito.find(i => i.id === id);
 
   if (item) {
@@ -65,9 +82,9 @@ window.agregarCarrito = function (id, nombre, precio, stock) {
   }
 
   actualizarCarrito();
-};
+}
 
-// Actualizar tabla carrito
+// ================= ACTUALIZAR CARRITO =================
 function actualizarCarrito() {
   tablaCarrito.innerHTML = "";
   let total = 0;
@@ -89,7 +106,7 @@ function actualizarCarrito() {
   totalSpan.textContent = total.toFixed(2);
 }
 
-// Registrar venta
+// ================= REGISTRAR VENTA =================
 btnComprar.addEventListener("click", async () => {
   if (carrito.length === 0) {
     msg.textContent = "El carrito está vacío";
@@ -97,20 +114,32 @@ btnComprar.addEventListener("click", async () => {
     return;
   }
 
+  const total = carrito.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
+
+  const payload = {
+    items: carrito.map(item => ({
+      producto_id: item.id,
+      cantidad: item.cantidad,
+      precio: item.precio
+    })),
+    total: total
+  };
+
   const res = await fetch("/api/ventas", {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + token,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ items: carrito })
+    body: JSON.stringify(payload)
   });
 
   const data = await res.json();
 
   if (data.ok) {
-    msg.textContent = "Venta registrada correctamente";
+    msg.textContent = "Venta registrada correctamente (incluido en blockchain)";
     msg.className = "text-success";
+
     carrito = [];
     actualizarCarrito();
     cargarProductos();
@@ -120,5 +149,5 @@ btnComprar.addEventListener("click", async () => {
   }
 });
 
-// Inicializar
+// ================= INICIALIZAR =================
 cargarProductos();

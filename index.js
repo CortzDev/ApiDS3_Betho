@@ -81,6 +81,40 @@ function sha256(x) {
   return crypto.createHash("sha256").update(x).digest("hex");
 }
 
+// --------------------- Blockchain utils extras ---------------------
+
+async function getLastHash() {
+  const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
+  return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
+}
+
+async function registrarBloqueVenta(ventaId, usuarioId, total, items) {
+  const hash_anterior = await getLastHash();
+  const timestamp = new Date().toISOString();
+
+  const data = {
+    venta_id: ventaId,
+    usuario_id: usuarioId,
+    total,
+    productos: items
+  };
+
+  const nonce = crypto.randomBytes(16).toString("hex");
+
+  const hash_actual = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(data) + nonce + hash_anterior)
+    .digest("hex");
+
+  await db.query(
+    `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
+     VALUES ($1,$2,$3,$4,$5)`,
+    [nonce, data, hash_actual, hash_anterior, timestamp]
+  );
+}
+
+
+
 async function obtenerHashPrevio() {
   const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
   return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
@@ -98,6 +132,33 @@ async function registrarEnBlockchain(operacion, dataObj) {
     [operacion, JSON.stringify(dataObj), actual, previo, timestamp]
   );
 }
+
+app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT 
+        b.id,
+        b.nonce,
+        b.data,
+        b.hash_actual,
+        b.hash_anterior,
+        b.fecha,
+        v.total AS total_venta
+      FROM blockchain b
+      LEFT JOIN ventas v 
+        ON CAST(b.data->>'venta_id' AS INT) = v.id
+      ORDER BY b.id ASC
+    `);
+
+    res.json({ ok: true, cadena: r.rows });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false, error: "Error al obtener blockchain" });
+  }
+});
+
+
 
 // --------------------- RUTAS ---------------------
 
@@ -441,7 +502,82 @@ app.get("/api/categorias", authRequired, async (req, res) => {
   }
 });
 
+// ===================== REGISTRAR VENTA (COMPATIBLE CON usuario.js) =====================
+app.post("/api/ventas", authRequired, async (req, res) => {
+  const usuarioId = req.user.id;
 
+  const { items, total } = req.body;
+
+  if (!items || items.length === 0)
+    return res.status(400).json({ ok: false, error: "Carrito vacío" });
+
+  const client = await db.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // 1. Insertar la venta
+    const rVenta = await client.query(
+      `INSERT INTO ventas(usuario_id, total)
+       VALUES ($1,$2)
+       RETURNING id, fecha`,
+      [usuarioId, total]
+    );
+
+    const ventaId = rVenta.rows[0].id;
+
+    // 2. Registrar detalle + actualizar stock
+    for (const item of items) {
+
+      // Obtener stock actual
+      const rStock = await client.query(
+        "SELECT stock, precio FROM productos WHERE id=$1 FOR UPDATE",
+        [item.producto_id]
+      );
+
+      if (!rStock.rows.length)
+        throw new Error("Producto no existe: " + item.producto_id);
+
+      const stockActual = rStock.rows[0].stock;
+      const precioActual = parseFloat(rStock.rows[0].precio);
+
+      if (stockActual < item.cantidad)
+        throw new Error("Stock insuficiente para producto " + item.producto_id);
+
+      // Insertar detalle
+      await client.query(
+        `INSERT INTO venta_detalle(venta_id, producto_id, cantidad, precio_unitario)
+         VALUES ($1,$2,$3,$4)`,
+        [
+          ventaId,
+          item.producto_id,
+          item.cantidad,
+          item.precio || precioActual
+        ]
+      );
+
+      // Actualizar stock
+      await client.query(
+        "UPDATE productos SET stock = stock - $1 WHERE id=$2",
+        [item.cantidad, item.producto_id]
+      );
+    }
+
+    // 3. Registrar blockchain
+    await registrarBloqueVenta(ventaId, usuarioId, total, items);
+
+    await client.query("COMMIT");
+
+    res.json({ ok: true, ventaId });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error registrando venta:", err);
+    res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    client.release();
+  }
+});
 
 // ===================== DASHBOARDS =====================
 app.get("/dashboard", (req, res) => {
