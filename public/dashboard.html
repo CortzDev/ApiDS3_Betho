@@ -31,7 +31,7 @@
 <div class="container-fluid">
   <div class="row">
 
-    <!-- Sidebar -->
+    <!-- Sidebar (solo cerrar sesión) -->
     <div class="col-md-2 sidebar">
       <h4 class="text-center">Admin</h4>
       <a href="#" id="logoutBtn">Cerrar sesión</a>
@@ -45,6 +45,7 @@
 
       <!-- Cards -->
       <div class="row mb-4">
+
         <div class="col-md-4">
           <div class="card shadow-sm">
             <div class="card-body">
@@ -65,42 +66,24 @@
 
       </div>
 
-      <!-- Tabla Roles -->
-      <div id="rolesSection" style="display:none;">
-        <h3>Administrar Roles</h3>
-        <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalRol">Nuevo Rol</button>
+      <!-- Tabla Proveedores -->
+      <div id="proveedoresSection" style="display:none;">
+        <h3>Lista de Proveedores</h3>
 
         <table class="table table-bordered table-striped">
           <thead>
             <tr>
               <th>ID</th>
               <th>Nombre</th>
-              <th>Acciones</th>
+              <th>Email</th>
+              <th>Empresa</th>
+              <th>Teléfono</th>
+              <th>Dirección</th>
             </tr>
           </thead>
-          <tbody id="tablaRoles"></tbody>
+          <tbody id="tablaProveedores"></tbody>
         </table>
       </div>
-
-      <!-- Tabla Proveedores -->
-<div id="proveedoresSection" style="display:none;">
-  <h3>Lista de Proveedores</h3>
-
-  <table class="table table-bordered table-striped">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Nombre</th>
-        <th>Email</th>
-        <th>Empresa</th>
-        <th>Teléfono</th>
-        <th>Dirección</th>
-      </tr>
-    </thead>
-    <tbody id="tablaProveedores"></tbody>
-  </table>
-</div>
-
 
       <!-- ACTIVIDAD BLOCKCHAIN -->
       <div id="actividadSection" style="display:none;">
@@ -127,10 +110,7 @@
   </div> <!-- FIN row -->
 </div> <!-- FIN container -->
 
-
-<!-- ===================== -->
 <!-- MODAL DETALLE BLOQUE -->
-<!-- ===================== -->
 <div class="modal fade" id="modalBloque" tabindex="-1" aria-labelledby="modalBloqueLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content shadow">
@@ -181,11 +161,9 @@
   </div>
 </div>
 
-
 <script src="js/bootstrap.bundle.min.js"></script>
 <script src="js/crypto-js.js"></script>
 <script src="js/dashboard.js"></script>
 
 </body>
 </html>
-
