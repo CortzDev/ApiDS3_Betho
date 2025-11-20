@@ -4,27 +4,42 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel Admin</title>
+
   <link rel="stylesheet" href="css/bootstrap.min.css">
 
-
+  <style>
+    .sidebar {
+      height: 100vh;
+      background: #343a40;
+      color: white;
+      padding-top: 20px;
+    }
+    .sidebar a {
+      color: #fff;
+      padding: 10px 20px;
+      display: block;
+      text-decoration: none;
+    }
+    .sidebar a:hover {
+      background: #495057;
+    }
+  </style>
 </head>
 
 <body>
+
 <div class="container-fluid">
   <div class="row">
 
     <!-- Sidebar -->
     <div class="col-md-2 sidebar">
       <h4 class="text-center">Admin</h4>
-      <a href="#">Dashboard</a>
-      <a href="#" id="linkRoles">Roles</a>
       <a href="#" id="logoutBtn">Cerrar sesión</a>
     </div>
 
     <!-- Content -->
     <div class="col-md-10 p-4">
 
-      <!-- Header -->
       <h2>Panel de Administración</h2>
       <hr>
 
@@ -33,8 +48,8 @@
         <div class="col-md-4">
           <div class="card shadow-sm">
             <div class="card-body">
-              <h5 class="card-title">Usuarios</h5>
-              <p class="card-text" id="countUsuarios">0</p>
+              <h5 class="card-title">Proveedores</h5>
+              <button id="btnProveedor" class="btn btn-dark mt-2">Ver Proveedores</button>
             </div>
           </div>
         </div>
@@ -42,24 +57,13 @@
         <div class="col-md-4">
           <div class="card shadow-sm">
             <div class="card-body">
-              <h5 class="card-title">Roles</h5>
-              <p class="card-text" id="countRoles">0</p>
+              <h5 class="card-title">Actividad</h5>
+              <button id="btnActividad" class="btn btn-dark mt-2">Ver Actividad</button>
             </div>
           </div>
         </div>
 
-      <div class="col-md-4">
-  <div class="card shadow-sm">
-    <div class="card-body">
-      <h5 class="card-title">Actividad</h5>
-      <p class="card-text" id="countActividad">0</p>
-      <button id="btnActividad" class="btn btn-dark mt-2">Ver Actividad</button>
-    </div>
-  </div>
-</div>
-
       </div>
-
 
       <!-- Tabla Roles -->
       <div id="rolesSection" style="display:none;">
@@ -78,70 +82,110 @@
         </table>
       </div>
 
-    </div>
-  </div>
-</div>
+      <!-- Tabla Proveedores -->
+<div id="proveedoresSection" style="display:none;">
+  <h3>Lista de Proveedores</h3>
 
-<!-- Modal Rol -->
-<div class="modal fade" id="modalRol" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Rol</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-
-      <div class="modal-body">
-        <input type="hidden" id="rolId">
-
-        <div class="mb-2">
-          <label>Nombre del Rol</label>
-          <input type="text" id="rolNombre" class="form-control">
-        </div>
-
-        <p id="msgRol"></p>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-        <button class="btn btn-primary" id="guardarRolBtn">Guardar</button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- SECTION: ACTIVIDAD (BLOCKCHAIN) -->
-<div id="actividadSection" style="display:none;">
-  <h3>Actividad del Sistema (Blockchain)</h3>
-  <p class="text-muted">Registros encadenados de operaciones y ventas.</p>
-
-  <table class="table table-striped table-bordered">
+  <table class="table table-bordered table-striped">
     <thead>
       <tr>
         <th>ID</th>
-        <th>Fecha</th>
-        <th>Nonce</th>
-        <th>Hash Anterior</th>
-        <th>Hash Actual</th>
-        <th>Total Venta</th>
-        <th>Válido</th>
+        <th>Nombre</th>
+        <th>Email</th>
+        <th>Empresa</th>
+        <th>Teléfono</th>
+        <th>Dirección</th>
       </tr>
     </thead>
-    <tbody id="tablaBlockchain"></tbody>
+    <tbody id="tablaProveedores"></tbody>
   </table>
 </div>
 
 
+      <!-- ACTIVIDAD BLOCKCHAIN -->
+      <div id="actividadSection" style="display:none;">
+        <h3>Actividad del Sistema (Blockchain)</h3>
+        <p class="text-muted">Registros encadenados de operaciones y ventas.</p>
+
+        <table class="table table-striped table-bordered">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Nonce</th>
+              <th>Hash Anterior</th>
+              <th>Hash Actual</th>
+              <th>Total Venta</th>
+              <th>Válido</th>
+            </tr>
+          </thead>
+          <tbody id="tablaBlockchain"></tbody>
+        </table>
+      </div>
+
+    </div> <!-- FIN contenido -->
+  </div> <!-- FIN row -->
+</div> <!-- FIN container -->
+
+
+<!-- ===================== -->
+<!-- MODAL DETALLE BLOQUE -->
+<!-- ===================== -->
+<div class="modal fade" id="modalBloque" tabindex="-1" aria-labelledby="modalBloqueLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content shadow">
+
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">Detalle del Bloque</h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="row">
+          <div class="col-md-6">
+            <p><strong>Operación:</strong> <span id="detOperacion"></span></p>
+            <p><strong>Fecha:</strong> <span id="detFecha"></span></p>
+            <p><strong>Total Venta:</strong> <span id="detTotalVenta"></span></p>
+          </div>
+          <div class="col-md-6">
+            <p><strong>Nonce:</strong> <span id="detNonce"></span></p>
+            <p><strong>Hash Anterior:</strong> <span id="detHashPrev" class="text-break"></span></p>
+            <p><strong>Hash Actual:</strong> <span id="detHashActual" class="text-break"></span></p>
+          </div>
+        </div>
+
+        <hr>
+
+        <h5>Productos</h5>
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Precio</th>
+              <th>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="detProductos"></tbody>
+        </table>
+
+      </div>
+
+      <div class="modal-footer">
+        <span id="detEstado"></span>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
 <script src="js/bootstrap.bundle.min.js"></script>
-
-<!-- CryptoJS local, permitido por CSP -->
 <script src="js/crypto-js.js"></script>
-
-<!-- Código de dashboard -->
 <script src="js/dashboard.js"></script>
-
-
 
 </body>
 </html>
+

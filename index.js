@@ -123,15 +123,32 @@ async function obtenerHashPrevio() {
 async function registrarEnBlockchain(operacion, dataObj) {
   const previo = await obtenerHashPrevio();
   const timestamp = new Date().toISOString();
-  const payload = { operacion, data: dataObj, timestamp };
-  const actual = sha256(previo + JSON.stringify(payload));
 
+  // Payload usado para generar el hash
+  const payload = {
+    operacion,
+    data: dataObj,
+    timestamp
+  };
+
+  // Hash EXACTO que también se validará en el frontend
+  const actual = sha256(previo + JSON.stringify(payload) + operacion);
+
+  // Insertar bloque
   await db.query(
     `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
      VALUES ($1,$2,$3,$4,$5)`,
-    [operacion, JSON.stringify(dataObj), actual, previo, timestamp]
+    [
+      operacion,                 // nonce (tu lo usas como la operación)
+      JSON.stringify(payload),   // guarda payload completo
+      actual,
+      previo,
+      timestamp
+    ]
   );
 }
+
+
 
 app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
   try {
@@ -145,7 +162,7 @@ app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
         b.fecha,
         v.total AS total_venta
       FROM blockchain b
-      LEFT JOIN ventas v 
+      LEFT JOIN ventas v
         ON CAST(b.data->>'venta_id' AS INT) = v.id
       ORDER BY b.id ASC
     `);
@@ -155,6 +172,68 @@ app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.json({ ok: false, error: "Error al obtener blockchain" });
+  }
+});
+
+app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const r = await db.query(`
+      SELECT 
+        b.id,
+        b.nonce,
+        b.data,
+        b.hash_actual,
+        b.hash_anterior,
+        b.fecha,
+        v.total AS total_venta,
+        v.usuario_id,
+        u.nombre AS usuario_nombre
+      FROM blockchain b
+      LEFT JOIN ventas v ON CAST(b.data->>'venta_id' AS INT) = v.id
+      LEFT JOIN usuarios u ON v.usuario_id = u.id
+      WHERE b.id = $1
+    `, [id]);
+
+    if (!r.rows.length)
+      return res.json({ ok: false, error: "Bloque no encontrado" });
+
+    const bloque = r.rows[0];
+
+    let productos = [];
+    if (bloque.data?.data?.productos) {
+      productos = bloque.data.data.productos;
+    }
+
+    res.json({ ok: true, bloque, productos });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false, error: "Error obteniendo detalle" });
+  }
+});
+
+app.get("/api/proveedores", authRequired, adminOnly, async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT 
+        p.id,
+        u.nombre,
+        u.email,
+        p.empresa,
+        p.telefono,
+        p.direccion
+      FROM proveedor p
+      JOIN usuarios u ON u.id = p.usuario_id
+      ORDER BY p.id ASC
+    `);
+
+    res.json({ ok: true, proveedores: r.rows });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false, error: "Error al obtener proveedores" });
   }
 });
 
