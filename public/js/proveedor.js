@@ -63,7 +63,7 @@ async function cargarCategorias() {
 }
 
 // =========================
-// EDITAR PRODUCTO (abre formulario)
+// ACTIVAR MODO EDICIÓN
 // =========================
 function activarModoEdicion(producto) {
   editando = true;
@@ -74,6 +74,7 @@ function activarModoEdicion(producto) {
   precio.value = producto.precio;
   stock.value = producto.stock;
 
+  // ✔ ahora funciona porque el backend devuelve categoria_id
   categoria.value = producto.categoria_id;
 
   msg.innerHTML = `<b>Editando producto ID ${producto.id}</b>`;
@@ -124,14 +125,15 @@ async function cargarProductos() {
           <td>${p.id}</td>
           <td>${p.nombre}</td>
           <td>${p.descripcion}</td>
-          <td>${p.categoria_id}</td>
+
+          <!-- ✔ Mostrar nombre de categoría -->
+          <td>${p.categoria}</td>
+
           <td>$${p.precio}</td>
           <td>${p.stock}</td>
           <td><button class="btn btn-warning btn-sm btn-edit">Editar</button></td>
           <td><button class="btn btn-danger btn-sm btn-delete">Eliminar</button></td>
         `;
-
-        // --- EVENTOS SIN INLINE (CSP-friendly) ---
 
         tr.querySelector(".btn-edit").addEventListener("click", () => {
           activarModoEdicion(p);
@@ -217,3 +219,4 @@ form.addEventListener("submit", async e => {
 // =========================
 cargarCategorias();
 cargarProductos();
+

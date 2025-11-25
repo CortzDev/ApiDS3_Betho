@@ -114,40 +114,45 @@ btnComprar.addEventListener("click", async () => {
     return;
   }
 
-  const total = carrito.reduce((sum, p) => sum + p.precio * p.cantidad, 0);
-
   const payload = {
-    items: carrito.map(item => ({
+    productos: carrito.map(item => ({
       producto_id: item.id,
       cantidad: item.cantidad,
-      precio: item.precio
-    })),
-    total: total
+      precio_unitario: item.precio
+    }))
   };
 
-  const res = await fetch("/api/ventas", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const res = await fetch("/api/usuario/venta", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (data.ok) {
-    msg.textContent = "Venta registrada correctamente (incluido en blockchain)";
-    msg.className = "text-success";
+    if (data.ok) {
+      msg.textContent = "Venta registrada correctamente (incluida en blockchain)";
+      msg.className = "text-success";
 
-    carrito = [];
-    actualizarCarrito();
-    cargarProductos();
-  } else {
-    msg.textContent = "Error: " + data.error;
+      carrito = [];
+      actualizarCarrito();
+      cargarProductos();
+    } else {
+      msg.textContent = "Error: " + data.error;
+      msg.className = "text-danger";
+    }
+
+  } catch (err) {
+    console.error("Error en compra:", err);
+    msg.textContent = "Error de conexión";
     msg.className = "text-danger";
   }
 });
+
 
 // ================= INICIALIZAR =================
 cargarProductos();
