@@ -135,7 +135,7 @@ btnComprar.addEventListener("click", async () => {
     const data = await res.json();
 
     if (data.ok) {
-      msg.textContent = "Venta registrada correctamente (incluida en blockchain)";
+      msg.textContent = "Venta registrada correctamente";
       msg.className = "text-success";
 
       carrito = [];
