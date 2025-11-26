@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Dashboard Usuario</title>
 
   <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -15,7 +14,6 @@
       padding: 40px 0;
       font-family: "Segoe UI", sans-serif;
     }
-
     .dashboard-card {
       background: #ffffffee;
       padding: 30px;
@@ -25,34 +23,11 @@
       box-shadow: 0 12px 30px rgba(0,0,0,0.2);
       animation: fadeIn 0.4s ease-in-out;
     }
-
-    .table {
-      background: white;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-
-    h2, h4, h3 {
-      color: #333;
-      font-weight: 600;
-    }
-
-    .btn-custom {
-      background: #283e51;
-      color: white;
-      transition: 0.3s;
-    }
-
-    .btn-custom:hover {
-      background: #4b79a1;
-      color: white;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
+    .table { background: white; border-radius: 10px; overflow: hidden; }
+    h2, h4, h3 { color: #333; font-weight: 600; }
+    .btn-custom { background: #283e51; color: white; transition: 0.3s; }
+    .btn-custom:hover { background: #4b79a1; color: white; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 
@@ -108,6 +83,11 @@
 
 </div>
 
+<!-- INPUT para seleccionar la llave: debe estar en body -->
+<input type="file" id="keyFile" accept=".pem,.key,.txt" style="display:none" />
+
+<!-- scripts: forge primero, luego tu usuario.js -->
+<script src="/js/forge.min.js"></script>
 <script src="/js/usuario.js"></script>
 </body>
 </html>
