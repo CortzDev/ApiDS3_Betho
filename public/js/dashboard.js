@@ -1,12 +1,34 @@
 document.addEventListener("DOMContentLoaded", () => {
 
   const token = localStorage.getItem("token");
+  const publicKeyPem = localStorage.getItem("admin_public_key_pem");
 
+  // =============== VALIDAR TOKEN ===============
   if (!token) {
     window.location.href = "/login.html";
     return;
   }
 
+  // ============================================================
+  // VALIDAR QUE EL ADMIN YA HAYA CARGADO SU LLAVE PUBLICA .PEM
+  // ============================================================
+
+  function pemValida(pem) {
+    if (!pem) return false;
+    return pem.includes("-----BEGIN PUBLIC KEY-----") ||
+           pem.includes("-----BEGIN RSA PUBLIC KEY-----");
+  }
+
+  // Si NO hay llave o NO es válida → mostrar modal inmediatamente
+  if (!pemValida(publicKeyPem)) {
+    const modal = document.getElementById("modalKey");
+    modal.style.display = "block";
+    modal.classList.add("show");
+  }
+
+  // ============================
+  // Elementos
+  // ============================
   const proveedoresSection = document.getElementById("proveedoresSection");
   const actividadSection = document.getElementById("actividadSection");
   const tablaProveedores = document.getElementById("tablaProveedores");
@@ -20,10 +42,25 @@ document.addEventListener("DOMContentLoaded", () => {
     window.location.href = "/login.html";
   });
 
+  // Helper: impedir acceso si no hay llave pública cargada
+  function checkPublicKey() {
+    const pem = localStorage.getItem("admin_public_key_pem");
+    if (!pemValida(pem)) {
+      alert("Debes cargar tu llave pública para usar el panel de administración.");
+      const modal = document.getElementById("modalKey");
+      modal.style.display = "block";
+      modal.classList.add("show");
+      return false;
+    }
+    return true;
+  }
+
   // =========================
   // CARGAR PROVEEDORES
   // =========================
   async function cargarProveedores() {
+    if (!checkPublicKey()) return;
+
     proveedoresSection.style.display = "block";
     actividadSection.style.display = "none";
     tablaProveedores.innerHTML = "";
@@ -36,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
 
       if (!data.ok) {
-        alert("Error al cargar proveedores");
+        alert("Error al cargar proveedores: " + (data.error || ""));
         return;
       }
 
@@ -59,7 +96,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // BOTÓN PROVEEDORES
   document.getElementById("btnProveedor")
     .addEventListener("click", cargarProveedores);
 
@@ -67,6 +103,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // CARGAR ACTIVIDAD (BLOCKCHAIN)
   // =========================
   async function cargarActividad() {
+    if (!checkPublicKey()) return;
+
     proveedoresSection.style.display = "none";
     actividadSection.style.display = "block";
     tablaBlockchain.innerHTML = "";
@@ -132,6 +170,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // DETALLE DE BLOQUE
   // =========================
   async function cargarDetalleBloque(id) {
+    if (!checkPublicKey()) return;
+
     try {
       const res = await fetch(`/api/blockchain/${id}`, {
         headers: { "Authorization": "Bearer " + token }

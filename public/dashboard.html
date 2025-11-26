@@ -28,6 +28,32 @@
 
 <body>
 
+<!-- ====================== MODAL PARA CARGAR LLAVE PUBLICA ======================= -->
+<div class="modal fade show" id="modalKey" tabindex="-1" aria-hidden="true" style="display:block; background:rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">Validación de Administrador</h5>
+      </div>
+
+      <div class="modal-body">
+        <p>Por seguridad, el panel de administrador requiere cargar tu <strong>llave pública</strong>.</p>
+
+        <input type="file" id="publicKeyInput" accept=".pem,.key,.txt" class="form-control">
+        <p id="keyError" class="text-danger mt-2" style="display:none;">Debes seleccionar un archivo válido.</p>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnCargarKey" class="btn btn-primary">Continuar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- ============================================================================= -->
+
+
 <div class="container-fluid">
   <div class="row">
 
@@ -163,6 +189,36 @@
 
 <script src="js/bootstrap.bundle.min.js"></script>
 <script src="js/crypto-js.js"></script>
+
+<script>
+// ================= VALIDACIÓN DE LLAVE PÚBLICA ADMIN ==================
+document.getElementById("btnCargarKey").addEventListener("click", () => {
+  const fileInput = document.getElementById("publicKeyInput");
+  const error = document.getElementById("keyError");
+
+  if (!fileInput.files.length) {
+    error.style.display = "block";
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    const pem = reader.result;
+
+    // Guardar la llave pública en localStorage
+    localStorage.setItem("admin_public_key_pem", pem);
+
+    // Ocultar modal manualmente
+    document.getElementById("modalKey").style.display = "none";
+    document.getElementById("modalKey").classList.remove("show");
+  };
+
+  reader.readAsText(file);
+});
+</script>
+
 <script src="js/dashboard.js"></script>
 
 </body>

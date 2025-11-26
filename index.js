@@ -11,12 +11,24 @@ const jwt = require("jsonwebtoken");
 
 const { authRequired, adminOnly, proveedorOnly } = require("./public/middlewares/auth.js");
 
+// --------------------------- Configs / Env checks ---------------------------
+const PORT = parseInt(process.env.PORT || "3000", 10);
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET no está definido. Define la variable de entorno y vuelve a ejecutar.");
+  process.exit(1);
+}
+
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "http://localhost:3000").split(",");
+
+// --------------------------- Helmet / Security ---------------------------
 const helmetOptions = {
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
       "default-src": ["'self'"],
 
+      // conservador: permitimos fuentes externas y CDNs conocidos
       "style-src": [
         "'self'",
         "'unsafe-inline'",
@@ -25,15 +37,15 @@ const helmetOptions = {
         "https://www.gstatic.com"
       ],
 
+      // evitamos 'unsafe-eval' (riesgoso). Si tu frontend necesita eval, vuelve a añadirlo con precaución.
       "script-src": [
         "'self'",
         "'unsafe-inline'",
-        "'unsafe-eval'",
         "https://cdn.jsdelivr.net",
         "https://cdnjs.cloudflare.com"
       ],
 
-      "img-src": ["'self'", "data:", "blob:"],
+      "img-src": ["'self'", "data:", "blob:", "https://www.gravatar.com"],
 
       "connect-src": [
         "'self'",
@@ -58,7 +70,7 @@ const helmetOptions = {
   crossOriginOpenerPolicy: false
 };
 
-
+// --------------------------- App setup ---------------------------
 const app = express();
 
 app.use((req, res, next) => {
@@ -68,26 +80,37 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cors({ origin: true, credentials: true }));
+
+// CORS: permitimos orígenes listados en FRONTEND_ORIGINS. En producción, ajusta esta lista.
+app.use(cors({
+  origin: function(origin, callback) {
+    // allow requests with no origin (mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    if (FRONTEND_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS policy: origin no permitida'), false);
+  },
+  credentials: true
+}));
+
 app.use(helmet(helmetOptions));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 
-
+// --------------------------- DB ---------------------------
 const db = new Pool({
   user: process.env.PGUSER || "postgres",
   password: process.env.PGPASSWORD || "12345",
   database: process.env.PGDATABASE || "railway",
   host: process.env.PGHOST || "localhost",
-  port: parseInt(process.env.PGPORT || "5432")
+  port: parseInt(process.env.PGPORT || "5432", 10)
 });
 
+// --------------------------- UTIL / CRYPTO HELPERS ---------------------------
 function sha256(x) {
   return crypto.createHash("sha256").update(x).digest("hex");
 }
 
-// ------------------ HELPERS for signing/verification ------------------
 // Canonical stringify: ordena claves recursivamente para coincidir con el cliente
 function canonicalStringify(obj) {
   if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
@@ -124,14 +147,19 @@ function validatePublicKeyPem(publicKeyPem) {
     return { ok: false, error: "Clave pública no parseable" };
   }
 }
-// ----------------------------------------------------------------------
 
+// --------------------------- Blockchain helpers (consistentes) ---------------------------
 async function getLastHash() {
   const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
   return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
 }
 
-// registrarBloqueVenta ahora acepta un objeto meta opcional que se guarda dentro de data
+async function obtenerHashPrevio() {
+  const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
+  return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
+}
+
+// registrarBloqueVenta ahora usa canonicalStringify y guarda data como JSONB consistente
 async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {}) {
   const hash_anterior = await getLastHash();
   const timestamp = new Date().toISOString();
@@ -145,7 +173,8 @@ async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {})
   };
   const nonce = crypto.randomBytes(16).toString("hex");
 
-  const hash_actual = sha256(JSON.stringify(data) + nonce + hash_anterior);
+  const serialized = canonicalStringify(data);
+  const hash_actual = sha256(serialized + nonce + hash_anterior);
 
   await db.query(
     `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
@@ -154,30 +183,26 @@ async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {})
   );
 }
 
-async function obtenerHashPrevio() {
-  const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
-  return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
-}
-
+// registrarEnBlockchain: guarda objeto JSON (no string) y usa canonicalStringify para el hash
 async function registrarEnBlockchain(operacion, dataObj) {
   const previo = await obtenerHashPrevio();
   const timestamp = new Date().toISOString();
 
   const payload = { operacion, data: dataObj, timestamp };
-  const actual = sha256(previo + JSON.stringify(payload) + operacion);
+  const serialized = canonicalStringify(payload);
+  const actual = sha256(previo + serialized + operacion);
 
   await db.query(
     `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
      VALUES ($1,$2,$3,$4,$5)`,
-    [operacion, JSON.stringify(payload), actual, previo, timestamp]
+    [crypto.randomBytes(12).toString("hex"), payload, actual, previo, timestamp]
   );
 }
 
-
+// --------------------------- Routes ---------------------------
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
-
 
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
@@ -189,11 +214,11 @@ app.post("/api/login", async (req, res) => {
       WHERE email=$1
     `;
     const r = await db.query(q, [email]);
-    if (!r.rows.length) return res.json({ ok: false });
+    if (!r.rows.length) return res.status(400).json({ ok: false });
 
     const user = r.rows[0];
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.json({ ok: false });
+    if (!match) return res.status(400).json({ ok: false });
 
     if (user.rol === "proveedor") {
       await db.query(
@@ -206,7 +231,7 @@ app.post("/api/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, nombre: user.nombre, rol: user.rol },
-      process.env.JWT_SECRET || "jwtsecret",
+      JWT_SECRET,
       { expiresIn: "2h" }
     );
 
@@ -217,7 +242,6 @@ app.post("/api/login", async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
-
 
 app.get("/api/perfil", authRequired, async (req, res) => {
   try {
@@ -234,7 +258,6 @@ app.get("/api/perfil", authRequired, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
-
 
 app.get("/api/categorias", authRequired, async (req, res) => {
   try {
@@ -264,10 +287,9 @@ app.get("/api/proveedores", authRequired, adminOnly, async (req, res) => {
     res.json({ ok: true, proveedores: r.rows });
   } catch (err) {
     console.error(err);
-    res.json({ ok: false, error: "Error al obtener proveedores" });
+    res.status(500).json({ ok: false, error: "Error al obtener proveedores" });
   }
 });
-
 
 app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
   try {
@@ -295,7 +317,6 @@ app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res
   }
 });
 
-
 app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
   const { nombre, descripcion, categoria_id, precio, stock } = req.body;
 
@@ -318,7 +339,6 @@ app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, re
     res.status(500).json({ ok: false });
   }
 });
-
 
 app.get("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
   const { id } = req.params;
@@ -378,7 +398,6 @@ app.put("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req,
   }
 });
 
-
 app.delete("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
   const { id } = req.params;
   try {
@@ -398,7 +417,6 @@ app.delete("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (r
     res.status(500).json({ ok: false, error: "Error interno" });
   }
 });
-
 
 app.get("/api/productos", authRequired, async (req, res) => {
   try {
@@ -422,13 +440,29 @@ app.get("/api/todos-productos", authRequired, adminOnly, async (req, res) => {
   }
 });
 
+// --------------------------- Helper validators ---------------------------
+function isValidInteger(n) {
+  return Number.isInteger(Number(n)) && Number(n) > 0;
+}
+function isValidNonNegativeNumber(x) {
+  return !Number.isNaN(Number(x)) && Number(x) >= 0;
+}
+
 // POST /api/usuario/venta now supports signed flow with nonce + signature verification
 app.post("/api/usuario/venta", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { productos, signature, public_key_pem, key_filename, nonce } = req.body;
 
-  if (!productos || productos.length === 0)
+  if (!Array.isArray(productos) || productos.length === 0)
     return res.status(400).json({ ok: false, error: "Debe enviar productos" });
+
+  // Basic validation of productos
+  for (const p of productos) {
+    if (!isValidInteger(p.producto_id)) return res.status(400).json({ ok: false, error: "producto_id inválido" });
+    if (!isValidInteger(p.cantidad)) return res.status(400).json({ ok: false, error: "cantidad inválida" });
+    if (p.precio_unitario !== undefined && !isValidNonNegativeNumber(p.precio_unitario))
+      return res.status(400).json({ ok: false, error: "precio_unitario inválido" });
+  }
 
   // If signature/public_key_pem/nonce provided => verify signature and nonce (recommended)
   if (signature || public_key_pem || nonce) {
@@ -452,11 +486,14 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
       // Reconstruct venta object exactly as client signed
       const venta = {
         productos: productos.map(p => ({
-          producto_id: p.producto_id,
-          cantidad: p.cantidad,
-          precio_unitario: p.precio_unitario
+          producto_id: Number(p.producto_id),
+          cantidad: Number(p.cantidad),
+          precio_unitario: p.precio_unitario !== undefined ? Number(p.precio_unitario) : undefined
         })),
-        total: productos.reduce((sum, p) => sum + p.cantidad * p.precio_unitario, 0)
+        total: productos.reduce((sum, p) => {
+          const unidad = p.precio_unitario !== undefined ? Number(p.precio_unitario) : 0;
+          return sum + Number(p.cantidad) * unidad;
+        }, 0)
       };
 
       // Message to verify is canonicalStringify({ venta, nonce })
@@ -477,6 +514,9 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
         console.error("Firma ya registrada o error en used_signatures:", err);
         return res.status(400).json({ ok: false, error: "Firma ya fue usada (replay detectado)" });
       }
+
+      // Ensure venta.total is sensible (no NaN) and positive
+      if (!isFinite(venta.total) || venta.total < 0) return res.status(400).json({ ok: false, error: "Total inválido" });
 
       // Proceed to create venta within transaction, mark nonce used
       const client = await db.connect();
@@ -510,7 +550,7 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
           await client.query(
             `INSERT INTO venta_detalle(venta_id, producto_id, cantidad, precio_unitario)
              VALUES ($1,$2,$3,$4)`,
-            [ventaId, p.producto_id, p.cantidad, p.precio_unitario || precioActual]
+            [ventaId, p.producto_id, p.cantidad, p.precio_unitario !== undefined ? p.precio_unitario : precioActual]
           );
 
           await client.query("UPDATE productos SET stock = stock - $1 WHERE id=$2", [p.cantidad, p.producto_id]);
@@ -519,11 +559,12 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
         // Mark nonce as used
         await client.query("UPDATE nonces SET used = true WHERE nonce = $1", [nonce]);
 
-        // Register in blockchain with meta (signature hash and public key)
+        // Register in blockchain with meta (signature hash and public key fingerprint)
+        const pubKeyFingerprint = sha256(public_key_pem);
         const meta = {
           signature_hash: signatureHash,
           key_filename: key_filename || null,
-          public_key_pem: public_key_pem
+          public_key_fingerprint: pubKeyFingerprint
         };
 
         await registrarBloqueVenta(ventaId, usuarioId, venta.total, productos, meta);
@@ -553,7 +594,10 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    const total = productos.reduce((sum, p) => sum + p.cantidad * p.precio_unitario, 0);
+    const total = productos.reduce((sum, p) => {
+      const precio = p.precio_unitario !== undefined ? Number(p.precio_unitario) : 0;
+      return sum + Number(p.cantidad) * precio;
+    }, 0);
 
     const rVenta = await client.query(
       `INSERT INTO ventas(usuario_id, total)
@@ -586,7 +630,7 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
           ventaId,
           p.producto_id,
           p.cantidad,
-          p.precio_unitario || precioActual
+          p.precio_unitario !== undefined ? p.precio_unitario : precioActual
         ]
       );
 
@@ -611,7 +655,7 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
   }
 });
 
-
+// --------------------------- Blockchain read endpoints ---------------------------
 app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -625,7 +669,7 @@ app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
         v.total AS total_venta
       FROM blockchain b
       LEFT JOIN ventas v
-        ON CAST(b.data->>'venta_id' AS INT) = v.id
+        ON (b.data->>'venta_id')::int = v.id
       ORDER BY b.id ASC
     `);
 
@@ -633,7 +677,7 @@ app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.json({ ok: false, error: "Error al obtener blockchain" });
+    res.status(500).json({ ok: false, error: "Error al obtener blockchain" });
   }
 });
 
@@ -653,18 +697,18 @@ app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
         v.usuario_id,
         u.nombre AS usuario_nombre
       FROM blockchain b
-      LEFT JOIN ventas v ON CAST(b.data->>'venta_id' AS INT) = v.id
+      LEFT JOIN ventas v ON (b.data->>'venta_id')::int = v.id
       LEFT JOIN usuarios u ON v.usuario_id = u.id
       WHERE b.id = $1
     `, [id]);
 
     if (!r.rows.length)
-      return res.json({ ok: false, error: "Bloque no encontrado" });
+      return res.status(404).json({ ok: false, error: "Bloque no encontrado" });
 
     const bloque = r.rows[0];
 
     let productos = [];
-    if (bloque.data?.data?.productos) {
+    if (bloque.data && bloque.data.data && bloque.data.data.productos) {
       productos = bloque.data.data.productos;
     }
 
@@ -672,11 +716,11 @@ app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.json({ ok: false, error: "Error obteniendo detalle" });
+    res.status(500).json({ ok: false, error: "Error obteniendo detalle" });
   }
 });
 
-
+// --------------------------- Static routes ---------------------------
 app.get("/proveedor", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "proveedor.html"));
 });
@@ -693,10 +737,9 @@ app.get("/usuario/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "usuario.html"));
 });
 
-
 app.use(express.static(path.join(__dirname, "public")));
 
-
+// --------------------------- DB init ---------------------------
 async function initDb() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS roles (
@@ -805,8 +848,7 @@ async function initDb() {
   }
 }
 
-
-// ---------------- Endpoint: generar nonce para firma (challenge) ----------------
+// --------------------------- Endpoint: generar nonce para firma (challenge) ---------------------------
 app.post("/api/venta/nonce", authRequired, async (req, res) => {
   try {
     const usuarioId = req.user.id;
@@ -831,10 +873,10 @@ setInterval(async () => {
   }
 }, 60 * 60 * 1000);
 
-
+// --------------------------- Main ---------------------------
 async function main() {
   await initDb();
-  app.listen(3000, () => console.log("Servidor JWT levantado en http://localhost:3000"));
+  app.listen(PORT, () => console.log(`Servidor JWT levantado en http://localhost:${PORT}`));
 }
 
 main().catch(err => console.error(err));
