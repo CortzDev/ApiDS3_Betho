@@ -3,61 +3,84 @@ document.addEventListener("DOMContentLoaded", () => {
   const token = localStorage.getItem("token");
   const publicKeyPem = localStorage.getItem("admin_public_key_pem");
 
-  // =============== VALIDAR TOKEN ===============
   if (!token) {
     window.location.href = "/login.html";
     return;
   }
 
-  // ============================================================
-  // VALIDAR QUE EL ADMIN YA HAYA CARGADO SU LLAVE PUBLICA .PEM
-  // ============================================================
+  /* ====================================================
+     ALERTAS BOOTSTRAP (Autoclose: 5 segundos)
+  ==================================================== */
+  function mostrarAlerta(mensaje, tipo = "info") {
+    const cont = document.getElementById("alertContainer");
 
+    const id = "alert-" + Date.now();
+    cont.insertAdjacentHTML("beforeend", `
+      <div id="${id}" class="alert alert-${tipo} alert-dismissible fade show" role="alert">
+        ${mensaje}
+        <button class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    `);
+
+    setTimeout(() => {
+      const a = document.getElementById(id);
+      if (a) bootstrap.Alert.getOrCreateInstance(a).close();
+    }, 5000);
+  }
+
+  /* ==================================================== */
+  /* VALIDACIÓN PEM                                       */
+  /* ==================================================== */
   function pemValida(pem) {
     if (!pem) return false;
     return pem.includes("-----BEGIN PUBLIC KEY-----") ||
            pem.includes("-----BEGIN RSA PUBLIC KEY-----");
   }
 
-  // Si NO hay llave o NO es válida → mostrar modal inmediatamente
   if (!pemValida(publicKeyPem)) {
-    const modal = document.getElementById("modalKey");
-    modal.style.display = "block";
-    modal.classList.add("show");
+    mostrarAlerta("Debes cargar tu llave pública antes de usar el panel.", "warning");
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey"));
+    modal.show();
   }
 
-  // ============================
-  // Elementos
-  // ============================
+  /* =========== STRINGIFY CANÓNICO =========== */
+  function canonicalStringify(obj) {
+    if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
+    if (Array.isArray(obj))
+      return "[" + obj.map(canonicalStringify).join(",") + "]";
+    const keys = Object.keys(obj).sort();
+    return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
+  }
+
+  /* =========== ELEMENTOS =========== */
   const proveedoresSection = document.getElementById("proveedoresSection");
   const actividadSection = document.getElementById("actividadSection");
   const tablaProveedores = document.getElementById("tablaProveedores");
   const tablaBlockchain = document.getElementById("tablaBlockchain");
 
-  // =========================
-  // LOGOUT
-  // =========================
+  /* ==================================================== */
+  /* LOGOUT                                               */
+  /* ==================================================== */
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.clear();
+    mostrarAlerta("Sesión cerrada correctamente.", "info");
     window.location.href = "/login.html";
   });
 
-  // Helper: impedir acceso si no hay llave pública cargada
   function checkPublicKey() {
     const pem = localStorage.getItem("admin_public_key_pem");
     if (!pemValida(pem)) {
-      alert("Debes cargar tu llave pública para usar el panel de administración.");
-      const modal = document.getElementById("modalKey");
-      modal.style.display = "block";
-      modal.classList.add("show");
+      mostrarAlerta("Debes cargar tu llave pública para usar el panel.", "warning");
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey"));
+      modal.show();
       return false;
     }
     return true;
   }
 
-  // =========================
-  // CARGAR PROVEEDORES
-  // =========================
+  /* ==================================================== */
+  /* CARGAR PROVEEDORES                                   */
+  /* ==================================================== */
   async function cargarProveedores() {
     if (!checkPublicKey()) return;
 
@@ -71,9 +94,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const data = await res.json();
-
       if (!data.ok) {
-        alert("Error al cargar proveedores: " + (data.error || ""));
+        mostrarAlerta("Error al cargar proveedores.", "danger");
         return;
       }
 
@@ -83,25 +105,26 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>${p.id}</td>
           <td>${p.nombre}</td>
           <td>${p.email}</td>
-          <td>${p.empresa}</td>
-          <td>${p.telefono}</td>
-          <td>${p.direccion}</td>
+          <td>${p.empresa ?? ""}</td>
+          <td>${p.telefono ?? ""}</td>
+          <td>${p.direccion ?? ""}</td>
         `;
         tablaProveedores.appendChild(tr);
       });
 
+      mostrarAlerta("Proveedores cargados correctamente.", "success");
+
     } catch (err) {
-      console.error("Error proveedores:", err);
-      alert("Error cargando proveedores");
+      console.error(err);
+      mostrarAlerta("Error inesperado al cargar proveedores.", "danger");
     }
   }
 
-  document.getElementById("btnProveedor")
-    .addEventListener("click", cargarProveedores);
+  document.getElementById("btnProveedor").addEventListener("click", cargarProveedores);
 
-  // =========================
-  // CARGAR ACTIVIDAD (BLOCKCHAIN)
-  // =========================
+  /* ==================================================== */
+  /* CARGAR ACTIVIDAD                                     */
+  /* ==================================================== */
   async function cargarActividad() {
     if (!checkPublicKey()) return;
 
@@ -117,37 +140,35 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
 
       if (!data.ok) {
-        alert("Error cargando actividad");
+        mostrarAlerta("Error cargando blockchain.", "danger");
         return;
       }
 
       data.cadena.forEach(b => {
-
-        const payloadString = JSON.stringify(b.data);
-        const previo = b.hash_anterior || "0".repeat(64);
-
+        const prev = b.hash_anterior || "0".repeat(64);
         const recalculado = CryptoJS.SHA256(
-          previo + payloadString + b.nonce
+          prev + canonicalStringify(b.data) + b.nonce
         ).toString();
 
         const valido = recalculado === b.hash_actual;
 
-        const totalVenta = b.total_venta
-          ? `$${b.total_venta}`
-          : (b.data?.data?.total ? `$${b.data.data.total}` : "N/A");
+        const totalVenta =
+          b.total_venta ??
+          b.data?.total ??
+          b.data?.data?.total ??
+          "N/A";
 
         const tr = document.createElement("tr");
-
         tr.innerHTML = `
           <td>${b.id}</td>
           <td>${new Date(b.fecha).toLocaleString()}</td>
           <td>${b.nonce}</td>
-          <td class="small text-break">${b.hash_anterior || "GENESIS"}</td>
+          <td class="small text-break">${prev}</td>
           <td class="small text-break">${b.hash_actual}</td>
           <td>${totalVenta}</td>
           <td>
-            <span class="badge ${valido ? 'bg-danger' : 'bg-success'}">
-              ${valido ? 'Corrupto' : 'Válido'}
+            <span class="badge ${valido ? "bg-success" : "bg-danger"}">
+              ${valido ? "Válido" : "Corrupto"}
             </span>
           </td>
         `;
@@ -157,18 +178,19 @@ document.addEventListener("DOMContentLoaded", () => {
         tablaBlockchain.appendChild(tr);
       });
 
+      mostrarAlerta("Actividad cargada correctamente.", "success");
+
     } catch (err) {
-      console.error("Error actividad:", err);
-      alert("Error cargando actividad");
+      console.error(err);
+      mostrarAlerta("Error cargando actividad.", "danger");
     }
   }
 
-  document.getElementById("btnActividad")
-    .addEventListener("click", cargarActividad);
+  document.getElementById("btnActividad").addEventListener("click", cargarActividad);
 
-  // =========================
-  // DETALLE DE BLOQUE
-  // =========================
+  /* ==================================================== */
+  /* DETALLE DE BLOQUE                                    */
+  /* ==================================================== */
   async function cargarDetalleBloque(id) {
     if (!checkPublicKey()) return;
 
@@ -180,36 +202,49 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
 
       if (!data.ok) {
-        alert("No se pudo cargar detalle");
+        mostrarAlerta("No se pudo cargar el detalle del bloque.", "danger");
         return;
       }
 
       const b = data.bloque;
 
-      document.getElementById("detOperacion").textContent = b.data.operacion;
+      document.getElementById("detOperacion").textContent = b.data.operacion || "Operación";
       document.getElementById("detFecha").textContent = new Date(b.fecha).toLocaleString();
       document.getElementById("detNonce").textContent = b.nonce;
       document.getElementById("detHashPrev").textContent = b.hash_anterior || "GENESIS";
       document.getElementById("detHashActual").textContent = b.hash_actual;
 
-      document.getElementById("detTotalVenta").textContent =
-        b.total_venta ? `$${b.total_venta}` : "N/A";
+      const totalVenta =
+        b.total_venta ??
+        b.data?.total ??
+        b.data?.data?.total ??
+        "N/A";
 
+      document.getElementById("detTotalVenta").textContent = totalVenta;
+
+      const prev = b.hash_anterior || "0".repeat(64);
       const recalculado = CryptoJS.SHA256(
-        (b.hash_anterior || "0".repeat(64)) + JSON.stringify(b.data) + b.nonce
+        prev + canonicalStringify(b.data) + b.nonce
       ).toString();
 
       const valido = recalculado === b.hash_actual;
 
-      document.getElementById("detEstado").innerHTML =
-        `<span class="badge ${valido ? "bg-success" : "bg-danger"}">
-           ${valido ? "Bloque Válido" : "Bloque Corrupto"}
-         </span>`;
+      document.getElementById("detEstado").innerHTML = `
+        <span class="badge ${valido ? "bg-success" : "bg-danger"}">
+          ${valido ? "Bloque Válido" : "Bloque Corrupto"}
+        </span>
+      `;
 
       const tbody = document.getElementById("detProductos");
       tbody.innerHTML = "";
 
-      (data.productos || []).forEach(p => {
+      const productos =
+        data.productos ||
+        b.data?.productos ||
+        b.data?.data?.productos ||
+        [];
+
+      productos.forEach(p => {
         const subtotal = p.cantidad * p.precio_unitario;
 
         const tr = document.createElement("tr");
@@ -222,12 +257,81 @@ document.addEventListener("DOMContentLoaded", () => {
         tbody.appendChild(tr);
       });
 
-      new bootstrap.Modal(document.getElementById("modalBloque")).show();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("modalBloque")).show();
 
     } catch (err) {
-      console.error("Detalle error:", err);
-      alert("Error cargando detalle");
+      console.error(err);
+      mostrarAlerta("Error cargando detalle del bloque.", "danger");
     }
   }
+
+  /* ==================================================== */
+  /* MINAR BLOQUE                                          */
+  /* ==================================================== */
+  document.getElementById("btnMine")?.addEventListener("click", async () => {
+    if (!checkPublicKey()) return;
+
+    try {
+      const res = await fetch("/api/mine", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        mostrarAlerta("No se pudo minar el bloque: " + (data.error || ""), "danger");
+        return;
+      }
+
+      mostrarAlerta("Bloque minado con éxito.", "success");
+      cargarActividad();
+
+    } catch (err) {
+      console.error(err);
+      mostrarAlerta("Error al minar el bloque.", "danger");
+    }
+  });
+
+  /* ==================================================== */
+  /* VALIDAR CADENA                                        */
+  /* ==================================================== */
+  document.getElementById("btnValidate")?.addEventListener("click", async () => {
+    if (!checkPublicKey()) return;
+
+    try {
+      /* 1) Consultar bloques pendientes */
+      const pending = await fetch("/api/pending-blocks", {
+        headers: { "Authorization": "Bearer " + token }
+      });
+
+      const pendData = await pending.json();
+
+      if (!pendData.ok || pendData.pending.length === 0) {
+        mostrarAlerta("No hay bloques pendientes para validar.", "warning");
+        return;
+      }
+
+      /* 2) Ejecutar validación */
+      const res = await fetch("/api/blockchain/validate", {
+        headers: { "Authorization": "Bearer " + token }
+      });
+
+      const data = await res.json();
+
+      if (data.ok) {
+        mostrarAlerta(`Cadena válida. Bloques verificados: ${data.length}`, "success");
+      } else {
+        mostrarAlerta("Se detectaron problemas en la cadena.", "danger");
+      }
+
+    } catch (err) {
+      console.error(err);
+      mostrarAlerta("Error validando cadena.", "danger");
+    }
+  });
 
 });
