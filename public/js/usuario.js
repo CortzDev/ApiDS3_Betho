@@ -1,81 +1,78 @@
-// ===============================
-// usuario.js SOLO SOLICITA LLAVE PRIVADA CON MODAL
-// ===============================
+// =========================================
+// usuario.js — Compra con PIN + Wallet del servidor
+// =========================================
 
-// Validación básica de sesión
+// Validación de sesión
 const token = localStorage.getItem("token");
-const rol = localStorage.getItem("rol");
+const rol   = localStorage.getItem("rol");
 
 if (!token || rol !== "usuario") {
   window.location.href = "/login.html";
 }
 
+// Referencias DOM
 const tablaProductos = document.getElementById("tablaProductos");
 const tablaCarrito   = document.getElementById("tablaCarrito");
 const totalSpan      = document.getElementById("total");
 const btnLogout      = document.getElementById("btnLogout");
 const btnComprar     = document.getElementById("btnComprar");
+const btnRegistrarWallet = document.getElementById("btnRegistrarWallet");
 
 let carrito = [];
 
-/* ---------------------------------------------------
-   WRAPPERS
-------------------------------------------------------*/
-function alertaSuccess(msg) { window.notifyVentaSuccess(msg); }
-function alertaError(msg)   { window.notifyVentaError(msg); }
-function alertaWarn(msg)    { window.notifyVentaWarning(msg); }
+// Toast helpers
+function alertaSuccess(m){ toastSuccess(m); }
+function alertaError(m)  { toastError(m); }
+function alertaWarn(m)   { toastInfo(m); }
 
-/* ---------------------------------------------------
-   LOGOUT
-------------------------------------------------------*/
-btnLogout.addEventListener("click", () => {
+// =========================================
+// LOGOUT
+// =========================================
+btnLogout.onclick = () => {
   localStorage.clear();
   window.location.href = "/login.html";
-});
+};
 
-/* ---------------------------------------------------
-   CARGAR PRODUCTOS
-------------------------------------------------------*/
+// =========================================
+// CARGAR PRODUCTOS
+// =========================================
 async function cargarProductos() {
-  try {
-    const res = await fetch("/api/productos", {
-      headers: { "Authorization": "Bearer " + token }
-    });
+  const res = await fetch("/api/productos", {
+    headers: { "Authorization": "Bearer " + token }
+  });
 
-    const data = await res.json();
-    tablaProductos.innerHTML = "";
+  const data = await res.json();
+  tablaProductos.innerHTML = "";
 
-    if (data.ok) {
-      data.productos.forEach(p => {
-        const tr = document.createElement("tr");
-
-        tr.innerHTML = `
-          <td>${p.nombre}</td>
-          <td>${p.descripcion}</td>
-          <td>$${p.precio}</td>
-          <td>${p.stock}</td>
-          <td>
-            <button class="btn btn-primary btn-sm btn-agregar"
-              data-id="${p.id}"
-              data-nombre="${p.nombre}"
-              data-precio="${p.precio}"
-              data-stock="${p.stock}">
-              Agregar
-            </button>
-          </td>
-        `;
-
-        tablaProductos.appendChild(tr);
-      });
-    }
-  } catch {
-    alertaError("Error cargando productos.");
+  if (!data.ok) {
+    alertaError("Error cargando productos");
+    return;
   }
+
+  data.productos.forEach(p => {
+    tablaProductos.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${p.nombre}</td>
+        <td>${p.descripcion}</td>
+        <td>$${p.precio}</td>
+        <td>${p.stock}</td>
+        <td>
+          <button class="btn btn-primary btn-sm btn-agregar"
+            data-id="${p.id}"
+            data-nombre="${p.nombre}"
+            data-precio="${p.precio}"
+            data-stock="${p.stock}">
+            Agregar
+          </button>
+        </td>
+      </tr>
+    `);
+  });
 }
 
-/* ---------------------------------------------------
-   AGREGAR AL CARRITO
-------------------------------------------------------*/
+// =========================================
+// AGREGAR AL CARRITO
+// =========================================
 document.addEventListener("click", e => {
   if (e.target.classList.contains("btn-agregar")) {
     const id     = parseInt(e.target.dataset.id);
@@ -89,212 +86,170 @@ document.addEventListener("click", e => {
 
 function agregarCarrito(id, nombre, precio, stock) {
   const item = carrito.find(i => i.id === id);
+
   if (item) {
     if (item.cantidad + 1 > stock) {
-      alertaError("Stock insuficiente.");
-      return;
+      return alertaError("Stock insuficiente.");
     }
     item.cantidad++;
   } else {
     carrito.push({ id, nombre, precio, cantidad: 1 });
   }
+
   actualizarCarrito();
 }
 
-/* ---------------------------------------------------
-   ACTUALIZAR CARRITO
-------------------------------------------------------*/
+// =========================================
+// ACTUALIZAR CARRITO
+// =========================================
 function actualizarCarrito() {
   tablaCarrito.innerHTML = "";
   let total = 0;
 
-  carrito.forEach(item => {
-    const subtotal = item.precio * item.cantidad;
+  carrito.forEach(p => {
+    const subtotal = p.precio * p.cantidad;
     total += subtotal;
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${item.nombre}</td>
-      <td>${item.cantidad}</td>
-      <td>$${subtotal.toFixed(2)}</td>
-    `;
-    tablaCarrito.appendChild(tr);
+    tablaCarrito.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td>${p.nombre}</td>
+        <td>${p.cantidad}</td>
+        <td>$${subtotal.toFixed(2)}</td>
+      </tr>
+    `);
   });
 
   totalSpan.textContent = total.toFixed(2);
 }
 
-/* ---------------------------------------------------
-   UTIL: leer archivo
-------------------------------------------------------*/
-function leerArchivoComoTexto(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Error leyendo archivo"));
-    reader.onload  = () => resolve(reader.result);
-    reader.readAsText(file);
+// =========================================
+// VERIFICAR WALLET EN SERVIDOR
+// =========================================
+async function verificarWallet() {
+  const res = await fetch("/api/wallet/me", {
+    headers: { "Authorization": "Bearer " + token }
   });
+
+  const data = await res.json();
+
+  if (!data.ok || !data.wallet) {
+    document.getElementById("modalCrearWallet").style.display = "flex";
+  }
 }
 
-/* ---------------------------------------------------
-   canonicalStringify
-------------------------------------------------------*/
-function canonicalStringify(obj) {
-  if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
-  if (Array.isArray(obj)) return "[" + obj.map(canonicalStringify).join(",") + "]";
-  const keys = Object.keys(obj).sort();
-  return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
-}
+// =========================================
+// REGISTRAR WALLET MANUALMENTE (BOTÓN)
+// =========================================
+btnRegistrarWallet.onclick = () => {
+  document.getElementById("modalCrearWallet").style.display = "flex";
+};
 
-/* ---------------------------------------------------
-   PEDIR NONCE
-------------------------------------------------------*/
-async function pedirNonce() {
-  const res = await fetch("/api/venta/nonce", {
+// =========================================
+// GUARDAR WALLET EN SERVIDOR
+// =========================================
+document.getElementById("btnSaveWallet").onclick = async () => {
+  const file = document.getElementById("walletPubKey").files[0];
+  const pin  = document.getElementById("walletPin").value;
+
+  if (!file) return alertaError("Selecciona una clave pública (.pem)");
+  if (!/^\d{4,8}$/.test(pin)) return alertaError("El PIN debe tener entre 4 y 8 dígitos");
+
+  const publicKeyPem = await file.text();
+
+  const res = await fetch("/api/wallet/register", {
     method: "POST",
     headers: {
       "Authorization": "Bearer " + token,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({})
+    body: JSON.stringify({ public_key_pem: publicKeyPem, pin })
   });
 
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error);
-  return data.nonce;
-}
+  if (!data.ok) return alertaError(data.error);
 
-/* ---------------------------------------------------
-   MODAL: pedir llave privada
-------------------------------------------------------*/
-function modalPedirLlavePrivada() {
+  alertaSuccess("Wallet registrada correctamente");
+  document.getElementById("modalCrearWallet").style.display = "none";
+};
+
+// =========================================
+// PEDIR PIN ANTES DE COMPRAR
+// =========================================
+function pedirPIN() {
+  const modal = document.getElementById("modalPin");
+  const input = document.getElementById("pinInput");
+
+  modal.style.display = "flex";
+  input.value = "";
+  input.focus();
+
   return new Promise(resolve => {
-    const modal = document.getElementById("modalKeyPrivada");
-    const btnCancel = document.getElementById("btnPrivKeyCancel");
-    const btnContinue = document.getElementById("btnPrivKeyContinue");
-    const input = document.getElementById("privateKeyFile");
 
-    input.value = "";
-    modal.style.display = "flex";
-
-    btnCancel.onclick = () => {
+    document.getElementById("btnPinCancel").onclick = () => {
       modal.style.display = "none";
       resolve(null);
     };
 
-    btnContinue.onclick = async () => {
-      if (!input.files.length) {
-        alertaWarn("Debes seleccionar una llave privada (.pem)");
+    document.getElementById("btnPinContinue").onclick = () => {
+      const pin = input.value.trim();
+
+      if (!/^\d{4,8}$/.test(pin)) {
+        alertaWarn("PIN inválido");
         return;
       }
 
-      const file = input.files[0];
-      const pem = await file.text();
-
       modal.style.display = "none";
-      resolve({ pem, filename: file.name });
+      resolve(pin);
     };
   });
 }
 
-/* ---------------------------------------------------
-   REGISTRAR VENTA — CON MODAL
-------------------------------------------------------*/
-btnComprar.addEventListener("click", async () => {
+// =========================================
+// REGISTRAR VENTA (usa wallet + PIN del servidor)
+// =========================================
+btnComprar.onclick = async () => {
 
   if (carrito.length === 0) {
-    alertaWarn("El carrito está vacío.");
-    return;
+    return alertaWarn("El carrito está vacío.");
   }
 
-  let nonce;
-  try {
-    nonce = await pedirNonce();
-  } catch {
-    return alertaError("No se pudo obtener el nonce.");
+  const pin = await pedirPIN();
+  if (!pin) return;
+
+  const productosPayload = carrito.map(p => ({
+    producto_id: p.id,
+    cantidad: p.cantidad,
+    precio_unitario: p.precio
+  }));
+
+  const payload = {
+    productos: productosPayload,
+    pin
+  };
+
+  const res = await fetch("/api/usuario/venta-pin", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    return alertaError(data.error || "Error procesando la venta");
   }
 
-  // Mostrar modal
-  const result = await modalPedirLlavePrivada();
-  if (!result) {
-    return alertaWarn("Operación cancelada.");
-  }
+  alertaSuccess("Venta procesada correctamente ✔");
+  carrito = [];
+  actualizarCarrito();
+  cargarProductos();
+};
 
-  const privatePem = result.pem;
-  const filename   = result.filename;
-
-  // ===================== FIRMA =====================
-  try {
-    // OBJETO VENTA
-    const productosPayload = carrito.map(item => ({
-      producto_id: item.id,
-      cantidad: item.cantidad,
-      precio_unitario: item.precio
-    }));
-
-    const venta = {
-      productos: productosPayload,
-      total: parseFloat(totalSpan.textContent) || 0
-    };
-
-    const messageObj = { venta, nonce };
-    const message = canonicalStringify(messageObj);
-
-    if (!window.forge) return alertaError("Forge no está cargado.");
-
-    let privateKey;
-    try {
-      privateKey = forge.pki.privateKeyFromPem(privatePem);
-    } catch {
-      return alertaError("La llave privada no es válida.");
-    }
-
-    const md = forge.md.sha256.create();
-    md.update(message, "utf8");
-
-    const signatureBytes  = privateKey.sign(md);
-    const signatureBase64 = forge.util.encode64(signatureBytes);
-
-    // Generar llave pública
-    const publicKey = forge.pki.setRsaPublicKey(privateKey.n, privateKey.e);
-    const publicPem = forge.pki.publicKeyToPem(publicKey);
-
-    // Payload final
-    const payload = {
-      productos: productosPayload,
-      signature: signatureBase64,
-      public_key_pem: publicPem,
-      key_filename: filename,
-      nonce
-    };
-
-    // Enviar al backend
-    const res = await fetch("/api/usuario/venta", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-
-    if (data.ok) {
-      alertaSuccess("Venta registrada correctamente ✔");
-      carrito = [];
-      actualizarCarrito();
-      cargarProductos();
-    } else {
-      alertaError(data.error || "Error desconocido");
-    }
-
-  } catch (err) {
-    alertaError("Error procesando la llave privada.");
-  }
-});
-
-/* ---------------------------------------------------
-   INICIO
-------------------------------------------------------*/
+// =========================================
+// INICIO
+// =========================================
 cargarProductos();
+verificarWallet();

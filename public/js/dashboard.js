@@ -9,12 +9,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /* ====================================================
-     ALERTAS BOOTSTRAP (Autoclose: 5 segundos)
+     ALERTAS BOOTSTRAP
   ==================================================== */
   function mostrarAlerta(mensaje, tipo = "info") {
     const cont = document.getElementById("alertContainer");
-
     const id = "alert-" + Date.now();
+
     cont.insertAdjacentHTML("beforeend", `
       <div id="${id}" class="alert alert-${tipo} alert-dismissible fade show" role="alert">
         ${mensaje}
@@ -28,9 +28,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5000);
   }
 
-  /* ==================================================== */
-  /* VALIDACIÓN PEM                                       */
-  /* ==================================================== */
+  /* ====================================================
+     VALIDAR PEM
+  ==================================================== */
   function pemValida(pem) {
     if (!pem) return false;
     return pem.includes("-----BEGIN PUBLIC KEY-----") ||
@@ -39,53 +39,75 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!pemValida(publicKeyPem)) {
     mostrarAlerta("Debes cargar tu llave pública antes de usar el panel.", "warning");
-    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey"));
-    modal.show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey")).show();
   }
 
-  /* =========== STRINGIFY CANÓNICO =========== */
+  /* ====================================================
+     STRINGIFY CANÓNICO
+  ==================================================== */
   function canonicalStringify(obj) {
     if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
-    if (Array.isArray(obj))
+    if (Array.isArray(obj)) {
       return "[" + obj.map(canonicalStringify).join(",") + "]";
+    }
     const keys = Object.keys(obj).sort();
     return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
   }
 
-  /* =========== ELEMENTOS =========== */
+
+  /* ====================================================
+     REFERENCIAS DOM
+  ==================================================== */
   const proveedoresSection = document.getElementById("proveedoresSection");
   const actividadSection = document.getElementById("actividadSection");
+  const walletSection = document.getElementById("walletSection");
+
   const tablaProveedores = document.getElementById("tablaProveedores");
   const tablaBlockchain = document.getElementById("tablaBlockchain");
+  const tablaWallets = document.getElementById("tablaWallets");
 
-  /* ==================================================== */
-  /* LOGOUT                                               */
-  /* ==================================================== */
+
+  /* ====================================================
+     LOGOUT
+  ==================================================== */
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.clear();
-    mostrarAlerta("Sesión cerrada correctamente.", "info");
     window.location.href = "/login.html";
   });
 
+
+  /* ====================================================
+     OCULTAR TODAS LAS SECCIONES
+  ==================================================== */
+  function ocultarTodo() {
+    proveedoresSection.style.display = "none";
+    actividadSection.style.display = "none";
+    walletSection.style.display = "none";
+  }
+
+
+  /* ====================================================
+     CHECK LLAVE PÚBLICA
+  ==================================================== */
   function checkPublicKey() {
     const pem = localStorage.getItem("admin_public_key_pem");
     if (!pemValida(pem)) {
       mostrarAlerta("Debes cargar tu llave pública para usar el panel.", "warning");
-      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey"));
-      modal.show();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById("modalKey")).show();
       return false;
     }
     return true;
   }
 
-  /* ==================================================== */
-  /* CARGAR PROVEEDORES                                   */
-  /* ==================================================== */
+
+  /* ====================================================
+     CARGAR PROVEEDORES
+  ==================================================== */
   async function cargarProveedores() {
     if (!checkPublicKey()) return;
 
+    ocultarTodo();
     proveedoresSection.style.display = "block";
-    actividadSection.style.display = "none";
     tablaProveedores.innerHTML = "";
 
     try {
@@ -94,8 +116,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const data = await res.json();
+
       if (!data.ok) {
-        mostrarAlerta("Error al cargar proveedores.", "danger");
+        mostrarAlerta("Error cargando proveedores", "danger");
         return;
       }
 
@@ -105,30 +128,29 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>${p.id}</td>
           <td>${p.nombre}</td>
           <td>${p.email}</td>
-          <td>${p.empresa ?? ""}</td>
-          <td>${p.telefono ?? ""}</td>
-          <td>${p.direccion ?? ""}</td>
+          <td>${p.empresa || ""}</td>
+          <td>${p.telefono || ""}</td>
+          <td>${p.direccion || ""}</td>
         `;
         tablaProveedores.appendChild(tr);
       });
 
-      mostrarAlerta("Proveedores cargados correctamente.", "success");
-
     } catch (err) {
       console.error(err);
-      mostrarAlerta("Error inesperado al cargar proveedores.", "danger");
+      mostrarAlerta("Error inesperado al cargar proveedores", "danger");
     }
   }
 
   document.getElementById("btnProveedor").addEventListener("click", cargarProveedores);
 
-  /* ==================================================== */
-  /* CARGAR ACTIVIDAD                                     */
-  /* ==================================================== */
+
+  /* ====================================================
+     CARGAR ACTIVIDAD (BLOCKCHAIN)
+  ==================================================== */
   async function cargarActividad() {
     if (!checkPublicKey()) return;
 
-    proveedoresSection.style.display = "none";
+    ocultarTodo();
     actividadSection.style.display = "block";
     tablaBlockchain.innerHTML = "";
 
@@ -139,8 +161,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const data = await res.json();
 
-      if (!data.ok) {
-        mostrarAlerta("Error cargando blockchain.", "danger");
+      if (!data.ok || !Array.isArray(data.cadena)) {
+        mostrarAlerta("Error al cargar blockchain", "danger");
         return;
       }
 
@@ -153,18 +175,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const valido = recalculado === b.hash_actual;
 
         const totalVenta =
-          b.total_venta ??
-          b.data?.total ??
-          b.data?.data?.total ??
-          "N/A";
+          b.total_venta ?? b.data?.total ?? b.data?.data?.total ?? "N/A";
 
         const tr = document.createElement("tr");
+
         tr.innerHTML = `
           <td>${b.id}</td>
           <td>${new Date(b.fecha).toLocaleString()}</td>
           <td>${b.nonce}</td>
-          <td class="small text-break">${prev}</td>
-          <td class="small text-break">${b.hash_actual}</td>
+          <td class="text-break small">${prev}</td>
+          <td class="text-break small">${b.hash_actual}</td>
           <td>${totalVenta}</td>
           <td>
             <span class="badge ${valido ? "bg-success" : "bg-danger"}">
@@ -174,23 +194,21 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
 
         tr.addEventListener("click", () => cargarDetalleBloque(b.id));
-
         tablaBlockchain.appendChild(tr);
       });
 
-      mostrarAlerta("Actividad cargada correctamente.", "success");
-
     } catch (err) {
       console.error(err);
-      mostrarAlerta("Error cargando actividad.", "danger");
+      mostrarAlerta("Error cargando actividad", "danger");
     }
   }
 
   document.getElementById("btnActividad").addEventListener("click", cargarActividad);
 
-  /* ==================================================== */
-  /* DETALLE DE BLOQUE                                    */
-  /* ==================================================== */
+
+  /* ====================================================
+     DETALLE DEL BLOQUE
+  ==================================================== */
   async function cargarDetalleBloque(id) {
     if (!checkPublicKey()) return;
 
@@ -208,17 +226,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const b = data.bloque;
 
-      document.getElementById("detOperacion").textContent = b.data.operacion || "Operación";
-      document.getElementById("detFecha").textContent = new Date(b.fecha).toLocaleString();
+      document.getElementById("detOperacion").textContent =
+        b.data?.operacion || "Venta";
+
+      document.getElementById("detFecha").textContent =
+        new Date(b.fecha).toLocaleString();
+
       document.getElementById("detNonce").textContent = b.nonce;
-      document.getElementById("detHashPrev").textContent = b.hash_anterior || "GENESIS";
+      document.getElementById("detHashPrev").textContent =
+        b.hash_anterior || "GENESIS";
+
       document.getElementById("detHashActual").textContent = b.hash_actual;
+      document.getElementById("detHashActual").dataset.blockid = b.id;
 
       const totalVenta =
-        b.total_venta ??
-        b.data?.total ??
-        b.data?.data?.total ??
-        "N/A";
+        b.total_venta ?? b.data?.total ?? b.data?.data?.total ?? "N/A";
 
       document.getElementById("detTotalVenta").textContent = totalVenta;
 
@@ -239,10 +261,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tbody.innerHTML = "";
 
       const productos =
-        data.productos ||
-        b.data?.productos ||
-        b.data?.data?.productos ||
-        [];
+        data.productos || b.data?.productos || b.data?.data?.productos || [];
 
       productos.forEach(p => {
         const subtotal = p.cantidad * p.precio_unitario;
@@ -257,7 +276,9 @@ document.addEventListener("DOMContentLoaded", () => {
         tbody.appendChild(tr);
       });
 
-      bootstrap.Modal.getOrCreateInstance(document.getElementById("modalBloque")).show();
+      bootstrap.Modal.getOrCreateInstance(
+        document.getElementById("modalBloque")
+      ).show();
 
     } catch (err) {
       console.error(err);
@@ -265,10 +286,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* ==================================================== */
-  /* MINAR BLOQUE                                          */
-  /* ==================================================== */
-  document.getElementById("btnMine")?.addEventListener("click", async () => {
+
+  /* ====================================================
+     MINAR BLOQUE
+  ==================================================== */
+  document.getElementById("btnMine").addEventListener("click", async () => {
     if (!checkPublicKey()) return;
 
     try {
@@ -277,13 +299,14 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: {
           "Authorization": "Bearer " + token,
           "Content-Type": "application/json"
-        }
+        },
+        body: "{}"
       });
 
       const data = await res.json();
 
       if (!data.ok) {
-        mostrarAlerta("No se pudo minar el bloque: " + (data.error || ""), "danger");
+        mostrarAlerta("No se pudo minar: " + (data.error || "Error"), "danger");
         return;
       }
 
@@ -296,36 +319,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* ==================================================== */
-  /* VALIDAR CADENA                                        */
-  /* ==================================================== */
+
+  /* ====================================================
+     VALIDAR CADENA
+  ==================================================== */
   document.getElementById("btnValidate")?.addEventListener("click", async () => {
     if (!checkPublicKey()) return;
 
     try {
-      /* 1) Consultar bloques pendientes */
-      const pending = await fetch("/api/pending-blocks", {
-        headers: { "Authorization": "Bearer " + token }
-      });
-
-      const pendData = await pending.json();
-
-      if (!pendData.ok || pendData.pending.length === 0) {
-        mostrarAlerta("No hay bloques pendientes para validar.", "warning");
-        return;
-      }
-
-      /* 2) Ejecutar validación */
-      const res = await fetch("/api/blockchain/validate", {
+      const res = await fetch("/api/blockchain/full-audit", {
         headers: { "Authorization": "Bearer " + token }
       });
 
       const data = await res.json();
 
       if (data.ok) {
-        mostrarAlerta(`Cadena válida. Bloques verificados: ${data.length}`, "success");
+        mostrarAlerta("Cadena válida ✔", "success");
       } else {
-        mostrarAlerta("Se detectaron problemas en la cadena.", "danger");
+        mostrarAlerta("Problemas detectados ❌", "danger");
+        console.warn("PROBLEMAS DETECTADOS:", data.problems || data.error);
       }
 
     } catch (err) {
@@ -333,5 +345,143 @@ document.addEventListener("DOMContentLoaded", () => {
       mostrarAlerta("Error validando cadena.", "danger");
     }
   });
+
+
+  /* ====================================================
+     ====  CARGAR WALLETS  =====
+  ==================================================== */
+/* ====================================================
+   ====  CARGAR WALLETS REGISTRADAS  =====
+==================================================== */
+/* ====================================================
+     ====  CARGAR WALLETS REGISTRADAS  =====
+==================================================== */
+async function cargarWallets() {
+  if (!checkPublicKey()) return;
+
+  ocultarTodo();
+  walletSection.style.display = "block";
+  tablaWallets.innerHTML = `
+    <tr><td colspan="4" class="text-center">Cargando...</td></tr>
+  `;
+
+  try {
+    const res = await fetch("/api/wallets/registered", {
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      tablaWallets.innerHTML = `
+        <tr><td colspan="4" class="text-danger text-center">Error al cargar wallets registradas</td></tr>
+      `;
+      return;
+    }
+
+    const wallets = data.wallets;
+    tablaWallets.innerHTML = "";
+
+    if (wallets.length === 0) {
+      tablaWallets.innerHTML = `
+        <tr><td colspan="4" class="text-center">No hay wallets registradas</td></tr>
+      `;
+      return;
+    }
+
+    wallets.forEach(w => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${w.fingerprint}</td>
+        <td>${w.usuario} <br> <small>${w.email}</small></td>
+        <td>${new Date(w.created_at).toLocaleString()}</td>
+        <td>
+          <button class="btn btn-primary btn-sm verWalletBtn" data-fp="${w.fingerprint}">
+            Ver Detalle
+          </button>
+        </td>
+      `;
+      tablaWallets.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(err);
+    tablaWallets.innerHTML = `
+      <tr><td colspan="4" class="text-danger text-center">Error de conexión</td></tr>
+    `;
+  }
+}
+
+
+
+
+  /* ====================================================
+     EVENTO BOTÓN WALLETS
+  ==================================================== */
+  document.getElementById("btnWallets").addEventListener("click", cargarWallets);
+
+
+  /* ====================================================
+     LISTENER UNIVERSAL PARA BOTÓN "Ver Detalle"
+     (REEMPLAZO DE onclick= PROHIBIDO POR CSP)
+  ==================================================== */
+  document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("verWalletBtn")) {
+      const fp = e.target.dataset.fp;
+      verWallet(fp);
+    }
+  });
+
+  /* ====================================================
+     DETALLE DE WALLET (simple)
+  ==================================================== */
+  function verWallet(fp) {
+    alert("Fingerprint: " + fp + "\n(Aquí puedes ampliar info si deseas)");
+  }
+
+
+  /* ====================================================
+     VERIFICAR FIRMA RSA (doble click)
+  ==================================================== */
+  document.getElementById("detHashActual")
+    ?.addEventListener("dblclick", () => {
+      const id = document.getElementById("detHashActual").dataset.blockid;
+      if (id) verificarFirma(id);
+    });
+
+
+  async function verificarFirma(id) {
+    if (!checkPublicKey()) return;
+
+    try {
+      const res = await fetch(`/api/blockchain/verify-signature/${id}`, {
+        headers: { "Authorization": "Bearer " + token }
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        mostrarAlerta("No se pudo verificar la firma.", "danger");
+        return;
+      }
+
+      mostrarAlerta(
+        data.valid
+          ? `✔ Firma válida — Wallet: ${data.fingerprint}`
+          : "❌ Firma inválida",
+        data.valid ? "success" : "danger"
+      );
+
+    } catch (err) {
+      console.error(err);
+      mostrarAlerta("Error verificando firma RSA.", "danger");
+    }
+  }
+
+
+  /* ====================================================
+     INICIO AUTOMÁTICO → Blockchain
+  ==================================================== */
+  cargarActividad();
 
 });

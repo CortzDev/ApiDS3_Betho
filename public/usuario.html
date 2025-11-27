@@ -22,7 +22,7 @@
       max-width: 950px;
       margin: auto;
       box-shadow: 0 12px 30px rgba(0,0,0,0.2);
-      animation: fadeIn 0.4s ease-in-out;
+      animation: fadeIn .4s ease-in-out;
     }
 
     .table {
@@ -39,9 +39,8 @@
     .btn-custom {
       background: #283e51;
       color: white;
-      transition: 0.3s;
+      transition: .3s;
     }
-
     .btn-custom:hover {
       background: #4b79a1;
       color: white;
@@ -49,16 +48,14 @@
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ---------------- MODAL DE LLAVE PRIVADA ---------------- */
+    /* ---------------- MODALES ---------------- */
     .modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       background: rgba(0,0,0,0.6);
       display: none;
       align-items: center;
@@ -83,10 +80,7 @@
       font-weight: bold;
     }
 
-    .modal-body {
-      padding: 20px;
-    }
-
+    .modal-body { padding: 20px; }
     .modal-footer {
       padding: 15px;
       display: flex;
@@ -94,8 +88,7 @@
       gap: 10px;
     }
 
-    .btn-primary,
-    .btn-secondary {
+    .btn-primary, .btn-secondary {
       padding: 8px 18px;
       border: none;
       border-radius: 6px;
@@ -103,7 +96,7 @@
     }
 
     @keyframes modalFade {
-      from { opacity: 0; transform: scale(0.95); }
+      from { opacity: 0; transform: scale(.95); }
       to   { opacity: 1; transform: scale(1); }
     }
   </style>
@@ -111,87 +104,104 @@
 
 <body>
 
-<!-- Toast Container -->
-<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:9999;"></div>
+<!-- TOASTS -->
+<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
 
 <div class="dashboard-card">
 
+  <!-- ⭐ BOTÓN AGREGADO AQUÍ ⭐ -->
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Panel del Usuario</h2>
-    <button id="btnLogout" class="btn btn-danger">Cerrar sesión</button>
+    <div>
+      <button id="btnRegistrarWallet" class="btn btn-warning me-2">Registrar Wallet</button>
+      <button id="btnLogout" class="btn btn-danger">Cerrar sesión</button>
+    </div>
   </div>
+  <!-- FIN BOTÓN -->
 
   <hr>
 
-  <!-- Productos -->
+  <!-- PRODUCTOS -->
   <h4 class="mt-3">Productos disponibles</h4>
   <div class="table-responsive">
     <table class="table table-striped shadow-sm">
       <thead class="table-dark">
-        <tr>
-          <th>Producto</th>
-          <th>Descripción</th>
-          <th>Precio</th>
-          <th>Stock</th>
-          <th>Acción</th>
-        </tr>
+      <tr>
+        <th>Producto</th>
+        <th>Descripción</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        <th>Acción</th>
+      </tr>
       </thead>
       <tbody id="tablaProductos"></tbody>
     </table>
   </div>
 
-  <!-- Carrito -->
+  <!-- CARRITO -->
   <h4 class="mt-4">Carrito</h4>
   <div class="table-responsive">
     <table class="table table-bordered shadow-sm">
       <thead class="table-secondary">
-        <tr>
-          <th>Producto</th>
-          <th>Cantidad</th>
-          <th>Subtotal</th>
-        </tr>
+      <tr>
+        <th>Producto</th>
+        <th>Cantidad</th>
+        <th>Subtotal</th>
+      </tr>
       </thead>
       <tbody id="tablaCarrito"></tbody>
     </table>
   </div>
 
-  <!-- Total y Comprar -->
+  <!-- TOTAL -->
   <h3 class="mt-3">Total: $<span id="total">0.00</span></h3>
 
   <button class="btn btn-custom w-100 mt-3" id="btnComprar">Registrar Venta</button>
 
 </div>
 
-<!-- Modal para seleccionar llave PRIVADA -->
-<div id="modalKeyPrivada" class="modal-overlay">
+<!-- Modal: INGRESAR PIN -->
+<div id="modalPin" class="modal-overlay">
   <div class="modal-box">
-    <div class="modal-header">
-      Seleccionar Llave Privada
-    </div>
-
+    <div class="modal-header">Ingrese su PIN</div>
     <div class="modal-body">
-      <p>Selecciona tu <b>llave privada (.pem)</b> para firmar la venta.</p>
-
-      <input type="file" id="privateKeyFile" accept=".pem,.key,.txt" class="form-control mt-2" />
+      <p>Ingresa tu PIN para autorizar la compra.</p>
+      <input type="password" id="pinInput" class="form-control" maxlength="8" placeholder="PIN (4-8 dígitos)">
     </div>
-
     <div class="modal-footer">
-      <button id="btnPrivKeyCancel" class="btn-secondary">Cancelar</button>
-      <button id="btnPrivKeyContinue" class="btn-primary">Continuar</button>
+      <button id="btnPinCancel" class="btn-secondary">Cancelar</button>
+      <button id="btnPinContinue" class="btn-primary">Continuar</button>
     </div>
   </div>
 </div>
 
-<!-- Scripts -->
-<script src="/js/bootstrap.bundle.min.js"></script>
-<script src="/js/forge.min.js"></script>
+<!-- Modal: REGISTRO DE WALLET -->
+<div id="modalCrearWallet" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">Registrar Wallet</div>
 
-<!-- SISTEMA DE TOASTS -->
+    <div class="modal-body">
+      <p>Sube tu <b>clave pública</b> y crea un PIN para tu wallet.</p>
+
+      <label>Clave Pública (.pem):</label>
+      <input type="file" id="walletPubKey" class="form-control" accept=".pem,.txt,.key">
+
+      <label class="mt-3">Crear PIN (4–8 dígitos):</label>
+      <input type="password" id="walletPin" class="form-control" maxlength="8">
+    </div>
+
+    <div class="modal-footer">
+      <button id="btnSaveWallet" class="btn-primary">Guardar Wallet</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/bootstrap.bundle.min.js"></script>
+
+<!-- TOASTS (queda igual) -->
 <script>
 (function () {
-
-  function createToast({ message = "", type = "info", delay = 5000 }) {
-
+  function createToast({ message="", type="info", delay=4000 }) {
     const colors = {
       success: "bg-success text-white",
       danger: "bg-danger text-white",
@@ -199,73 +209,108 @@
       info: "bg-info text-dark"
     };
 
-    const cls = colors[type] || colors.info;
     const id = "toast_" + Date.now();
-
     const html = `
-      <div id="${id}" class="toast toast-custom ${cls} align-items-center border-0"
-           role="alert" aria-live="polite" aria-atomic="true"
+      <div id="${id}" class="toast ${colors[type]} border-0" role="alert"
            data-bs-delay="${delay}">
         <div class="d-flex">
           <div class="toast-body">${message}</div>
-          <button class="btn-close btn-close-white me-2 m-auto"
-                  data-bs-dismiss="toast"></button>
+          <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
         </div>
-      </div>
-    `;
+      </div>`;
 
-    const container = document.getElementById("toastContainer");
-    container.insertAdjacentHTML("beforeend", html);
+    toastContainer.insertAdjacentHTML("beforeend", html);
 
-    const toastEl = document.getElementById(id);
-    const toastObj = new bootstrap.Toast(toastEl);
-
-    toastObj.show();
-    setTimeout(() => toastEl.remove(), delay + 500);
+    const toast = new bootstrap.Toast(document.getElementById(id));
+    toast.show();
+    setTimeout(() => document.getElementById(id)?.remove(), delay + 500);
   }
 
-  window.notifyVentaSuccess = (msg) =>
-    createToast({ message: msg || "Venta realizada correctamente", type: "success" });
-
-  window.notifyVentaError = (msg) =>
-    createToast({ message: msg || "Error registrando la venta", type: "danger" });
-
-  window.notifyVentaWarning = (msg) =>
-    createToast({ message: msg || "Aviso", type: "warning" });
+  window.toastInfo    = msg=> createToast({ message:msg, type:"info" });
+  window.toastSuccess = msg=> createToast({ message:msg, type:"success" });
+  window.toastError   = msg=> createToast({ message:msg, type:"danger" });
 
 })();
 </script>
 
-<!-- SCRIPT DEL MODAL DE LLAVE PRIVADA -->
+<!-- WALLET + PIN -->
 <script>
-function pedirLlavePrivada(callback) {
-  const modal = document.getElementById("modalKeyPrivada");
-  const btnCancel = document.getElementById("btnPrivKeyCancel");
-  const btnContinue = document.getElementById("btnPrivKeyContinue");
-  const fileInput = document.getElementById("privateKeyFile");
+async function verificarWallet() {
+  const token = localStorage.getItem("token");
+
+  const res = await fetch("/api/wallet/me", {
+    headers: { "Authorization": "Bearer " + token }
+  });
+
+  const data = await res.json();
+
+  if (!data.ok || !data.wallet) {
+    document.getElementById("modalCrearWallet").style.display = "flex";
+  }
+}
+
+// Guardar Wallet
+document.getElementById("btnSaveWallet").onclick = async () => {
+  const file = document.getElementById("walletPubKey").files[0];
+  const pin = document.getElementById("walletPin").value;
+
+  if (!file) return toastError("Selecciona una clave pública");
+  if (!pin || pin.length < 4) return toastError("El PIN debe tener mínimo 4 dígitos");
+
+  const publicKeyPem = await file.text();
+  const token = localStorage.getItem("token");
+
+  const res = await fetch("/api/wallet/register", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ public_key_pem: publicKeyPem, pin })
+  });
+
+  const data = await res.json();
+  if (!data.ok) return toastError(data.error);
+
+  toastSuccess("Wallet registrada correctamente");
+  document.getElementById("modalCrearWallet").style.display = "none";
+};
+
+// ⭐ NUEVO BOTÓN: abrir modal manualmente
+document.getElementById("btnRegistrarWallet").onclick = () => {
+  document.getElementById("modalCrearWallet").style.display = "flex";
+};
+
+// Modal PIN
+function pedirPin(callback) {
+  const modal = document.getElementById("modalPin");
+  const input = document.getElementById("pinInput");
 
   modal.style.display = "flex";
+  input.value = "";
+  input.focus();
 
-  btnCancel.onclick = () => {
-    modal.style.display = "none";
-  };
+  document.getElementById("btnPinCancel").onclick = () => modal.style.display = "none";
 
-  btnContinue.onclick = async () => {
-    if (!fileInput.files.length) {
-      notifyVentaWarning("Debes seleccionar una llave privada (.pem)");
+  document.getElementById("btnPinContinue").onclick = () => {
+    const PIN = input.value.trim();
+    if (PIN.length < 4) {
+      toastError("PIN inválido");
       return;
     }
-
-    const file = fileInput.files[0];
-    const privateKeyPem = await file.text();
-
     modal.style.display = "none";
-    callback(privateKeyPem, file.name);
+    callback(PIN);
   };
 }
 </script>
 
+<!-- LÓGICA -->
 <script src="/js/usuario.js"></script>
+
+<script>
+// Verificar wallet al cargar la página
+document.addEventListener("DOMContentLoaded", verificarWallet);
+</script>
 
 </body>
 </html>

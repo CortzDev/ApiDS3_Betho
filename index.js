@@ -1,3 +1,13 @@
+/**
+ * index.js
+ * Opción A1 - Versión completa, corregida y compatible con dashboard.js
+ *
+ * Notas:
+ * - Requiere encrypt.js con funciones encryptJSON / decryptJSON (misma API que usabas).
+ * - Requiere middlewares en ./public/middlewares/auth.js (authRequired, adminOnly, proveedorOnly).
+ * - Mantiene rutas y respuesta JSON compatibles con tu frontend.
+ */
+
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
@@ -21,18 +31,29 @@ const { authRequired, adminOnly, proveedorOnly } = require("./public/middlewares
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
-  console.error("FATAL: JWT_SECRET no está definido. Define la variable de entorno y vuelve a ejecutar.");
+  console.error(
+    "FATAL: JWT_SECRET no está definido. Define la variable de entorno y vuelve a ejecutar."
+  );
   process.exit(1);
 }
 
-const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "http://localhost:3000").split(",");
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "http://localhost:3000")
+  .split(",");
 
 // -------------------------------- HTTPS options --------------------------------
-// Lee server.key / server.cert (debes generarlos y colocarlos en la raíz del proyecto)
-const httpsOptions = {
+// Permite fallback a HTTP si no hay certs locales (útil para desarrollo)
+let hasCerts = true;
+if (!fs.existsSync(path.join(__dirname, "server.key")) ||
+    !fs.existsSync(path.join(__dirname, "server.cert"))) {
+  console.warn(
+    "server.key/server.cert no encontrados en la raíz — arrancando con HTTP (cambiar a HTTPS en producción)"
+  );
+  hasCerts = false;
+}
+const httpsOptions = hasCerts ? {
   key: fs.readFileSync(path.join(__dirname, "server.key")),
   cert: fs.readFileSync(path.join(__dirname, "server.cert")),
-};
+} : null;
 
 // --------------------------- Helmet / Security ---------------------------
 const helmetOptions = {
@@ -82,7 +103,7 @@ app.use(express.urlencoded({ extended: true }));
 // CORS: permitimos orígenes listados
 app.use(cors({
   origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // allow tools like curl / same-origin
     if (FRONTEND_ORIGINS.includes(origin)) return callback(null, true);
     return callback(new Error('CORS policy: origin no permitida'), false);
   },
@@ -100,6 +121,16 @@ const db = new Pool({
   host: process.env.PGHOST || "localhost",
   port: parseInt(process.env.PGPORT || "5432", 10)
 });
+
+function isEncryptedBlock(obj) {
+  return (
+    obj &&
+    typeof obj === "object" &&
+    typeof obj.iv === "string" &&
+    typeof obj.value === "string" &&
+    typeof obj.tag === "string"
+  );
+}
 
 // --------------------------- UTIL / CRYPTO HELPERS ---------------------------
 function sha256(x) {
@@ -163,16 +194,12 @@ async function verifyBlockRow(row) {
     const prevHash = row.hash_anterior || "0".repeat(64);
     const nonce = row.nonce;
 
-    // row.data puede ser:
-    //  - objeto cifrado { iv, value, tag }  (JSONB)
-    //  - o objeto ya en claro (legacy)
     let payload = row.data;
     try {
       if (payload && payload.iv && payload.value && payload.tag) {
         payload = decryptJSON(payload);
       }
     } catch (err) {
-      // si falla el descifrado, considerarlo inválido
       throw new Error("No se pudo descifrar data del bloque");
     }
 
@@ -190,32 +217,33 @@ async function getLastHash() {
   const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
   return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
 }
-// --------------------------- MINAR PENDING BLOCK (CIFRADO AGREGADO) ---------------------------
-async function minePendingBlock(minerName = null, maxAttempts = 5_000_000) {
+
+// --------------------------- MINAR PENDING BLOCK (CIFRADO AGREGADO)
+// Ahora acepta pendingId opcional para minar un pending específico
+async function minePendingBlock(minerName = null, maxAttempts = 5_000_000, pendingId = null) {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
 
-    // Tomar el siguiente pending_block
-    const r = await client.query(`
-      SELECT id, data 
-      FROM pending_blocks 
-      ORDER BY id ASC 
-      LIMIT 1 
-      FOR UPDATE SKIP LOCKED
-    `);
+    // Seleccionar pending block. Si se indicó pendingId, lo seleccionamos; si no, tomamos el primero.
+    const q = pendingId
+      ? `SELECT id, data FROM pending_blocks WHERE id = $1 FOR UPDATE`
+      : `SELECT id, data FROM pending_blocks ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
+
+    const r = pendingId
+      ? await client.query(q, [pendingId])
+      : await client.query(q);
+
     if (!r.rows.length) {
       await client.query("ROLLBACK");
       return { ok: false, error: "No hay bloques pendientes" };
     }
 
     const pending = r.rows[0];
-    const payload = pending.data;
+    const payload = JSON.parse(JSON.stringify(pending.data));
 
     // hash_prev actual
-    const prev = await client.query(`
-      SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1
-    `);
+    const prev = await client.query(`SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1`);
     const prevHash = prev.rows.length ? prev.rows[0].hash_actual : "0".repeat(64);
 
     // Intento de minado
@@ -228,27 +256,22 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000) {
 
       if (isValidProof(hash, POW_DIFFICULTY)) break;
 
+      // Si tarda más de 60s, aborta el loop para evitar bloquear
       if ((i & 2047) === 0 && Date.now() - start > 60000) break;
     }
 
     if (!hash || !isValidProof(hash, POW_DIFFICULTY)) {
-      await client.query(
-        `UPDATE pending_blocks SET attempted = attempted + 1 WHERE id = $1`,
-        [pending.id]
-      );
+      await client.query(`UPDATE pending_blocks SET attempted = attempted + 1 WHERE id = $1`, [pending.id]);
       await client.query("COMMIT");
       return { ok: false, error: "No se encontró un nonce válido en el límite de intentos" };
     }
 
-    // -------------------------------
     // Cifrar bloque antes de guardarlo
-    // -------------------------------
     const encryptedData = encryptJSON(payload);
 
     const now = new Date().toISOString();
     await client.query(
-      `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
-       VALUES ($1,$2,$3,$4,$5)`,
+      `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha) VALUES ($1,$2,$3,$4,$5)`,
       [nonce, encryptedData, hash, prevHash, now]
     );
 
@@ -262,11 +285,12 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000) {
       hash,
       nonce,
       blockData: payload,
-      miner: minerName || "unknown"
+      miner: minerName || "unknown",
+      blockId: null
     };
 
   } catch (err) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(()=>{});
     console.error("Error minando:", err);
     return { ok: false, error: err.message };
   } finally {
@@ -274,24 +298,25 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000) {
   }
 }
 
-// --------------------------- Registrar Bloques (Ahora en pending) ---------------------------
+// --------------------------- Registrar Bloques (Ahora en pending)
 async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {}) {
   const timestamp = new Date().toISOString();
 
-  const data = {
+  const payload = {
     operacion: "venta",
     venta_id: ventaId,
     usuario_id: usuarioId,
-    total,
-    productos: items,
+    total: total,
+    productos: items.map(p => ({
+      producto_id: Number(p.producto_id),
+      cantidad: Number(p.cantidad),
+      precio_unitario: Number(p.precio_unitario)
+    })),
     meta,
     timestamp
   };
 
-  await db.query(
-    `INSERT INTO pending_blocks (data) VALUES ($1)`,
-    [data]
-  );
+  await db.query(`INSERT INTO pending_blocks (data) VALUES ($1)`, [payload]);
 }
 
 async function registrarEnPending(operacion, dataObj) {
@@ -301,20 +326,15 @@ async function registrarEnPending(operacion, dataObj) {
     timestamp: new Date().toISOString()
   };
 
-  await db.query(
-    `INSERT INTO pending_blocks (data) VALUES ($1)`,
-    [payload]
-  );
+  await db.query(`INSERT INTO pending_blocks (data) VALUES ($1)`, [payload]);
 }
 
 // --------------------------- ENDPOINTS COMUNES ---------------------------
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "login.html"));
-});
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 
 // --------------------------- LOGIN ---------------------------
 app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   try {
     const r = await db.query(`
       SELECT u.id, u.nombre, u.password, r.nombre AS rol
@@ -438,9 +458,10 @@ app.get("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res
     res.status(500).json({ ok: false, error: "Error interno" });
   }
 });
+
 // --------------------------- CREAR PRODUCTO PROVEEDOR ---------------------------
 app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, res) => {
-  const { nombre, descripcion, categoria_id, precio, stock } = req.body;
+  const { nombre, descripcion, categoria_id, precio, stock } = req.body || {};
 
   try {
     const rProv = await db.query(
@@ -500,7 +521,7 @@ app.get("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req,
 // --------------------------- ACTUALIZAR PRODUCTO PROVEEDOR ---------------------------
 app.put("/api/proveedor/productos/:id", authRequired, proveedorOnly, async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, categoria_id, precio, stock } = req.body;
+  const { nombre, descripcion, categoria_id, precio, stock } = req.body || {};
 
   try {
     const rProv = await db.query(
@@ -602,10 +623,61 @@ function isValidNonNegativeNumber(x) {
   return !Number.isNaN(Number(x)) && Number(x) >= 0;
 }
 
+
+// ======================================================
+//  REGISTRO DE USUARIO
+// ======================================================
+app.post("/api/register", async (req, res) => {
+    try {
+        const { nombre, email, password, rol } = req.body;
+
+        if (!nombre || !email || !password || !rol) {
+            return res.status(400).json({ ok: false, error: "Todos los campos son obligatorios." });
+        }
+
+        // Buscar rol_id real
+        const r = await db.query("SELECT id FROM roles WHERE nombre=$1", [rol]);
+        if (!r.rows.length) {
+            return res.status(400).json({ ok: false, error: "Rol inválido." });
+        }
+
+        const rol_id = r.rows[0].id;
+
+        // Verificar email
+        const existe = await db.query("SELECT id FROM usuarios WHERE email=$1", [email]);
+        if (existe.rows.length > 0) {
+            return res.status(400).json({ ok: false, error: "El correo ya está registrado." });
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+
+        // INSERT CORRECTO
+        const result = await db.query(
+            `INSERT INTO usuarios (nombre, email, password, rol_id)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, nombre, email, rol_id`,
+            [nombre, email, hashed, rol_id]
+        );
+
+        return res.status(201).json({
+            ok: true,
+            message: "Usuario registrado correctamente ✔",
+            user: result.rows[0]
+        });
+
+    } catch (err) {
+        console.error("❌ Error en /api/register:", err);
+        return res.status(500).json({ ok: false, error: "Error interno del servidor." });
+    }
+});
+
+
+
+
 // --------------------------- VENTA CON FIRMA + NONCE + BLOCKCHAIN ---------------------------
 app.post("/api/usuario/venta", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
-  const { productos, signature, public_key_pem, key_filename, nonce } = req.body;
+  const { productos, signature, public_key_pem, key_filename, nonce } = req.body || {};
 
   if (!Array.isArray(productos) || productos.length === 0)
     return res.status(400).json({ ok: false, error: "Debe enviar productos" });
@@ -680,10 +752,7 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
       // Prevenir reuso de firma
       const signatureHash = sha256(signature + message);
       try {
-        await db.query(
-          "INSERT INTO used_signatures(signature_hash) VALUES($1)",
-          [signatureHash]
-        );
+        await db.query("INSERT INTO used_signatures(signature_hash) VALUES($1)", [signatureHash]);
       } catch (err) {
         return res.status(400).json({ ok: false, error: "Firma ya usada (replay)" });
       }
@@ -735,16 +804,14 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
         }
 
         // Consumir nonce
-        await client.query(
-          "UPDATE nonces SET used = true WHERE nonce = $1",
-          [nonce]
-        );
+        await client.query("UPDATE nonces SET used = true WHERE nonce = $1", [nonce]);
 
-        // Registrar bloque pendiente
+        // Registrar bloque pendiente (incluimos public_key_pem en meta para identificar wallet)
         const meta = {
           signature_hash: signatureHash,
           key_filename: key_filename || null,
-          fingerprint: sha256(public_key_pem)
+          fingerprint: sha256(public_key_pem),
+          public_key_pem
         };
 
         await registrarBloqueVenta(ventaId, usuarioId, venta.total, productos, meta);
@@ -843,71 +910,105 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
 app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
-      SELECT 
-        b.id,
-        b.nonce,
-        b.data,
-        b.hash_actual,
-        b.hash_anterior,
-        b.fecha
-      FROM blockchain b
-      ORDER BY b.id ASC
+      SELECT id, nonce, data, hash_actual, hash_anterior, fecha
+      FROM blockchain
+      ORDER BY id ASC
     `);
 
-    const decrypted = r.rows.map(row => ({
-      ...row,
-      data: decryptJSON(row.data)
-    }));
+    const blocks = [];
 
-    res.json({ ok: true, cadena: decrypted });
+    for (const b of r.rows) {
+      let payload;
+
+      if (isEncryptedBlock(b.data)) {
+        try {
+          payload = decryptJSON(b.data);
+        } catch (err) {
+          console.error("Error decrypting block:", err);
+          payload = { error: "Bloque cifrado pero dañado" };
+        }
+      } else {
+        // Bloque legacy sin cifrar
+        payload = b.data;
+      }
+
+      // Resolver total_venta (si aplica)
+      let total_venta = null;
+
+      if (payload && payload.venta_id) {
+        try {
+          const q = await db.query("SELECT total FROM ventas WHERE id=$1", [payload.venta_id]);
+          if (q.rows.length) total_venta = q.rows[0].total;
+        } catch (err) {
+          console.error("Error consultando total_venta", err);
+        }
+      }
+
+      // Aseguramos que b.data contenga el payload para compatibilidad con frontend
+      blocks.push({
+        ...b,
+        data: payload,
+        total_venta
+      });
+    }
+
+    res.json({ ok: true, cadena: blocks });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: "Error al obtener blockchain" });
+    console.error("ERROR /api/blockchain:", err);
+    res.status(500).json({ ok: false });
   }
 });
 
 // --------------------------- VALIDAR CADENA (CIFRADA) ---------------------------
 app.get("/api/blockchain/validate", authRequired, adminOnly, async (req, res) => {
   try {
-    const r = await db.query(`
-      SELECT id, nonce, data, hash_actual, hash_anterior, fecha
-      FROM blockchain
-      ORDER BY id ASC
-    `);
-
-    const rows = r.rows;
-    let prev = "0".repeat(64);
+    const r = await db.query(`SELECT * FROM blockchain ORDER BY id ASC`);
+    let prevHash = "0".repeat(64);
     const problems = [];
 
-    for (const b of rows) {
-      const data = decryptJSON(b.data);
-      const recalculated = computeBlockHash(prev, data, b.nonce);
+    for (const b of r.rows) {
+      let payload;
 
+      try {
+        payload = isEncryptedBlock(b.data) ? decryptJSON(b.data) : b.data;
+      } catch {
+        problems.push({ id: b.id, error: "Bloque cifrado dañado" });
+        prevHash = b.hash_actual;
+        continue;
+      }
+
+      if (b.hash_anterior !== prevHash)
+        problems.push({ id: b.id, error: "hash_anterior incorrecto" });
+
+      const recalculated = computeBlockHash(prevHash, payload, b.nonce);
       if (recalculated !== b.hash_actual)
-        problems.push({ id: b.id, error: "hash no coincide" });
+        problems.push({ id: b.id, error: "hash_actual incorrecto" });
 
-      prev = b.hash_actual;
+      if (!isValidProof(b.hash_actual, POW_DIFFICULTY))
+        problems.push({ id: b.id, error: "PoW inválido" });
+
+      prevHash = b.hash_actual;
     }
 
-    if (problems.length)
-      return res.json({ ok: false, problems });
-
-    res.json({ ok: true, message: "Cadena válida", length: rows.length });
+    res.json({ ok: problems.length === 0, problems });
 
   } catch (err) {
-    console.error("Error validando cadena:", err);
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("ERROR validate:", err);
+    res.status(500).json({ ok: false, error: "Error en validación" });
   }
 });
 
 // --------------------------- DETALLE BLOQUE ---------------------------
 app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
-  try {
-    const { id } = req.params;
+  const id = Number(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ ok: false, error: "ID inválido" });
+  }
 
+  try {
     const r = await db.query(`
-      SELECT *
+      SELECT id, nonce, data, hash_actual, hash_anterior, fecha
       FROM blockchain
       WHERE id=$1
     `, [id]);
@@ -915,14 +1016,20 @@ app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
     if (!r.rows.length)
       return res.status(404).json({ ok: false, error: "Bloque no encontrado" });
 
-    const bloque = r.rows[0];
-    const data = decryptJSON(bloque.data);
+    const b = r.rows[0];
 
-    res.json({ ok: true, bloque: { ...bloque, data } });
+    let payload = isEncryptedBlock(b.data)
+      ? decryptJSON(b.data)
+      : b.data;
+
+    // Para compatibilidad con frontend: colocar payload dentro de b.data
+    b.data = payload;
+
+    res.json({ ok: true, bloque: b });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: "Error obteniendo detalle" });
+    console.error("ERROR /blockchain/:id:", err);
+    res.status(500).json({ ok: false });
   }
 });
 
@@ -942,23 +1049,388 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   }
 });
 
-// --------------------------- MINAR BLOQUE ---------------------------
+// --------------------------- MINAR BLOQUE (acepta body vacío)
 app.post("/api/mine", authRequired, adminOnly, async (req, res) => {
   const { miner_name } = req.body || {};
 
   try {
+    // Intentamos minar el primer pending disponible
     const result = await minePendingBlock(miner_name || "admin");
-
-    if (!result.ok)
-      return res.status(400).json(result);
+    if (!result.ok) return res.status(400).json(result);
 
     res.json({ ok: true, mined: result });
-
   } catch (err) {
-    console.error("Error en /api/mine:", err);
+    console.error("ERROR /api/mine:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+app.post("/api/wallet/register", authRequired, async (req, res) => {
+  const usuarioId = req.user.id;
+  const { public_key_pem, pin } = req.body;
+
+  if (!public_key_pem || !pin) {
+    return res.status(400).json({ ok: false, error: "Faltan datos" });
+  }
+
+  // validar longitud pin
+  if (pin.length < 4 || pin.length > 10)
+    return res.status(400).json({ ok: false, error: "PIN inválido" });
+
+  const vpub = validatePublicKeyPem(public_key_pem);
+  if (!vpub.ok)
+    return res.status(400).json({ ok: false, error: "Clave PEM inválida" });
+
+  const fingerprint = sha256(public_key_pem);
+  const pinHash = await bcrypt.hash(pin, 10);
+
+  try {
+    const r = await db.query(`
+      INSERT INTO wallets (usuario_id, public_key_pem, pin_hash, fingerprint)
+      VALUES ($1,$2,$3,$4)
+      ON CONFLICT (usuario_id) DO UPDATE
+      SET public_key_pem=$2, pin_hash=$3, fingerprint=$4, updated_at=NOW()
+      RETURNING *
+    `, [usuarioId, public_key_pem, pinHash, fingerprint]);
+
+    res.json({ ok: true, wallet: r.rows[0] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "Error registrando wallet" });
+  }
+});
+
+app.post("/api/usuario/venta-pin", authRequired, async (req, res) => {
+  const usuarioId = req.user.id;
+  const { productos, pin } = req.body;
+
+  if (!pin || !Array.isArray(productos))
+    return res.status(400).json({ ok: false, error: "Datos incompletos" });
+
+  // Buscar wallet del usuario
+  const w = await db.query("SELECT * FROM wallets WHERE usuario_id=$1", [usuarioId]);
+  if (!w.rows.length)
+    return res.status(400).json({ ok: false, error: "No tienes wallet registrada" });
+
+  const wallet = w.rows[0];
+
+  // validar PIN
+  const okPin = await bcrypt.compare(pin, wallet.pin_hash);
+  if (!okPin)
+    return res.status(403).json({ ok: false, error: "PIN incorrecto" });
+
+  // =========== PROCESAR VENTA NORMAL ============
+  try {
+    const client = await db.connect();
+    await client.query("BEGIN");
+
+    const total = productos.reduce((sum, p) => sum + (p.cantidad * p.precio_unitario), 0);
+
+    const rVenta = await client.query(`
+      INSERT INTO ventas(usuario_id, total)
+      VALUES ($1,$2)
+      RETURNING id
+    `, [usuarioId, total]);
+
+    const ventaId = rVenta.rows[0].id;
+
+    for (const p of productos) {
+      await client.query(`
+        INSERT INTO venta_detalle(venta_id, producto_id, cantidad, precio_unitario)
+        VALUES ($1,$2,$3,$4)
+      `, [ventaId, p.producto_id, p.cantidad, p.precio_unitario]);
+
+      await client.query(`
+        UPDATE productos SET stock = stock - $1 WHERE id=$2
+      `, [p.cantidad, p.producto_id]);
+    }
+
+    // Bloque pendiente con metadata
+    await registrarEnPending("venta", {
+      venta_id: ventaId,
+      usuario: usuarioId,
+      productos,
+      total,
+      meta: {
+        fingerprint: wallet.fingerprint,
+        wallet_id: wallet.id
+      }
+    });
+
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, ventaId });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, error: "Error registrando venta" });
+  }
+});
+
+// =============================
+// OBTENER WALLET DEL USUARIO
+// =============================
+app.get("/api/wallet/me", authRequired, async (req, res) => {
+  try {
+    const usuarioId = req.user.id;
+
+    const r = await db.query(`
+      SELECT id, usuario_id, public_key_pem, fingerprint, created_at, updated_at
+      FROM wallets
+      WHERE usuario_id = $1
+    `, [usuarioId]);
+
+    if (!r.rows.length) {
+      return res.json({ ok: false, wallet: null });
+    }
+
+    res.json({ ok: true, wallet: r.rows[0] });
+
+  } catch (err) {
+    console.error("Error /api/wallet/me:", err);
+    res.status(500).json({ ok: false, error: "Error obteniendo wallet" });
+  }
+});
+
+
+// --------------------------- LISTAR WALLETS ---------------------------
+app.get("/api/wallets", authRequired, adminOnly, async (req, res) => {
+  try {
+    const walletsMap = new Map();
+
+    // Buscar wallets en pending_blocks
+    const rPending = await db.query(`SELECT id, data, created_at FROM pending_blocks`);
+    for (const row of rPending.rows) {
+      const meta = row.data?.meta;
+      if (meta?.public_key_pem || meta?.fingerprint) {
+        const fp = meta.public_key_pem 
+          ? sha256(meta.public_key_pem)
+          : meta.fingerprint;
+
+        if (!walletsMap.has(fp)) {
+          walletsMap.set(fp, {
+            fingerprint: fp,
+            public_key_pem: meta.public_key_pem || null,
+            first_seen: row.created_at,
+            count: 1
+          });
+        } else {
+          walletsMap.get(fp).count++;
+        }
+      }
+    }
+
+    // Buscar wallets en blockchain
+    const rChain = await db.query(`SELECT id, data, fecha FROM blockchain`);
+    for (const row of rChain.rows) {
+      let payload;
+      try {
+        payload = isEncryptedBlock(row.data)
+          ? decryptJSON(row.data)
+          : row.data;
+      } catch {
+        continue;
+      }
+
+      const meta = payload?.meta;
+      if (meta?.public_key_pem || meta?.fingerprint) {
+        const fp = meta.public_key_pem 
+          ? sha256(meta.public_key_pem)
+          : meta.fingerprint;
+
+        if (!walletsMap.has(fp)) {
+          walletsMap.set(fp, {
+            fingerprint: fp,
+            public_key_pem: meta.public_key_pem || null,
+            first_seen: row.fecha,
+            count: 1
+          });
+        } else {
+          walletsMap.get(fp).count++;
+        }
+      }
+    }
+
+    res.json({ ok: true, wallets: [...walletsMap.values()] });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "Error obteniendo wallets" });
+  }
+});
+
+app.get("/api/wallets/registered", authRequired, adminOnly, async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT 
+        w.id,
+        w.usuario_id,
+        u.nombre AS usuario,
+        u.email,
+        w.fingerprint,
+        w.created_at,
+        w.updated_at
+      FROM wallets w
+      JOIN usuarios u ON u.id = w.usuario_id
+      ORDER BY w.id ASC
+    `);
+
+    res.json({ ok: true, wallets: r.rows });
+
+  } catch (err) {
+    console.error("Error obteniendo wallets registradas:", err);
+    res.status(500).json({ ok: false, error: "Error obteniendo wallets registradas" });
+  }
+});
+
+
+// --------------------------- VALIDAR UN BLOQUE ---------------------------
+app.get("/api/blockchain/validate-one/:id", authRequired, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const r = await db.query(`
+      SELECT id, nonce, data, hash_actual, hash_anterior
+      FROM blockchain
+      WHERE id=$1
+    `, [id]);
+
+    if (!r.rows.length)
+      return res.json({ ok: false, error: "Bloque no encontrado" });
+
+    const b = r.rows[0];
+
+    let payload = b.data;
+    if (isEncryptedBlock(payload)) {
+      try {
+        payload = decryptJSON(payload);
+      } catch {
+        return res.json({ ok: false, error: "Bloque cifrado dañado" });
+      }
+    }
+
+    const prev = b.hash_anterior || "0".repeat(64);
+    const recalculated = computeBlockHash(prev, payload, b.nonce);
+
+    if (recalculated !== b.hash_actual)
+      return res.json({ ok: false, error: "Hash incorrecto" });
+
+    if (!isValidProof(b.hash_actual, POW_DIFFICULTY))
+      return res.json({ ok: false, error: "PoW inválido" });
+
+    return res.json({ ok: true });
+
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: false, error: "Error interno" });
+  }
+});
+
+// --------------------------- VERIFICAR FIRMA RSA POR BLOQUE ---------------------------
+app.get("/api/blockchain/verify-signature/:id", authRequired, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const r = await db.query(`SELECT id, data, nonce FROM blockchain WHERE id=$1`, [id]);
+    if (!r.rows.length) return res.json({ ok: false, error: "Bloque no encontrado" });
+
+    let payload;
+    const row = r.rows[0];
+
+    try {
+      payload = isEncryptedBlock(row.data)
+        ? decryptJSON(row.data)
+        : row.data;
+    } catch {
+      return res.json({ ok: false, error: "Bloque cifrado/dañado" });
+    }
+
+    const meta = payload.meta;
+    if (!meta || !meta.public_key_pem || !meta.signature || !meta.nonce) {
+      return res.json({ ok: false, error: "El bloque no contiene firma RSA" });
+    }
+
+    const messageObj = {
+      venta: {
+        productos: payload.productos,
+        total: payload.total
+      },
+      nonce: meta.nonce
+    };
+
+    const message = canonicalStringify(messageObj);
+    const valid = verifySignature(meta.public_key_pem, message, meta.signature);
+
+    res.json({
+      ok: true,
+      valid,
+      fingerprint: meta.fingerprint,
+      key_filename: meta.key_filename || null
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.json({ ok: false, error: "Error verificando firma" });
+  }
+});
+
+// --------------------------- AUDITORÍA COMPLETA ---------------------------
+app.get("/api/blockchain/full-audit", authRequired, adminOnly, async (req, res) => {
+  try {
+    const r = await db.query(`SELECT * FROM blockchain ORDER BY id ASC`);
+    let prevHash = "0".repeat(64);
+    const problems = [];
+
+    for (const b of r.rows) {
+      let payload;
+
+      try {
+        payload = isEncryptedBlock(b.data)
+          ? decryptJSON(b.data)
+          : b.data;
+      } catch {
+        problems.push({ id: b.id, error: "Bloque cifrado dañado" });
+        prevHash = b.hash_actual;
+        continue;
+      }
+
+      if (b.hash_anterior !== prevHash)
+        problems.push({ id: b.id, error: "hash_anterior inválido" });
+
+      const recalculated = computeBlockHash(prevHash, payload, b.nonce);
+      if (recalculated !== b.hash_actual)
+        problems.push({ id: b.id, error: "hash_actual incorrecto" });
+
+      if (!isValidProof(b.hash_actual, POW_DIFFICULTY))
+        problems.push({ id: b.id, error: "PoW inválido" });
+
+      prevHash = b.hash_actual;
+    }
+
+    res.json({ ok: problems.length === 0, problems });
+
+  } catch (err) {
+    console.error("ERROR full-audit:", err);
+    return res.json({ ok: false, problems: [{ error: "Error auditoría interna" }] });
+  }
+});
+
+// --------------------------- MINAR UN SOLO PENDING POR ID ---------------------------
+app.post("/api/mine/one", authRequired, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.json({ ok: false, error: "Falta id" });
+
+    const result = await minePendingBlock("admin", 5_000_000, id);
+    return res.json(result);
+
+  } catch (err) {
+    console.log(err);
+    res.json({ ok: false, error: "Error minando pending" });
+  }
+});
+
 // --------------------------- NONCE PARA FIRMA ---------------------------
 app.post("/api/venta/nonce", authRequired, async (req, res) => {
   try {
@@ -1123,6 +1595,20 @@ async function initDb() {
     );
   `);
 
+  // WALLET (cada usuario solo puede tener una)
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS wallets (
+      id SERIAL PRIMARY KEY,
+      usuario_id INT NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+      public_key_pem TEXT NOT NULL,
+      pin_hash TEXT NOT NULL,
+      fingerprint TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+
   // Insertar roles básicos si no existen
   const r = await db.query("SELECT COUNT(*) FROM roles");
   if (parseInt(r.rows[0].count) === 0) {
@@ -1137,13 +1623,13 @@ async function initDb() {
 async function main() {
   await initDb();
 
-  // Levantar HTTPS server (en lugar de app.listen)
-  https.createServer({
-    key: fs.readFileSync(path.join(__dirname, "server.key")),
-    cert: fs.readFileSync(path.join(__dirname, "server.cert"))
-  }, app).listen(PORT, () =>
-    console.log(`🔐 Servidor HTTPS + JWT + Blockchain + Mining en https://localhost:${PORT}`)
-  );
+  if (hasCerts && httpsOptions) {
+    https.createServer(httpsOptions, app).listen(PORT, () =>
+      console.log(`🔐 Servidor HTTPS + JWT + Blockchain + Mining en https://localhost:${PORT}`)
+    );
+  } else {
+    app.listen(PORT, () => console.log(`Servidor HTTP (dev) en http://localhost:${PORT}`));
+  }
 }
 
 main().catch(err => console.error(err));
