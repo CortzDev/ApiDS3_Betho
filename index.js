@@ -3,7 +3,6 @@
  */
 
 require("dotenv").config();
-const { sshToPem } = require("./sshToPem.js");
 const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
@@ -13,6 +12,10 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const { Pool } = require("pg");
 const jwt = require("jsonwebtoken");
+const { sshToPem } = require("./public/middlewares/sshToPem.js");
+
+const zlib = require("zlib");
+const { constants: cryptoConstants } = require("crypto");
 
 // Encriptación de bloques (tu encrypt.js)
 const { encryptJSON, decryptJSON } = require("./encrypt.js");
@@ -143,24 +146,33 @@ function verifySignature(publicKeyPem, message, signatureBase64) {
 }
 
 function validatePublicKeyPem(publicKeyPem) {
-  if (typeof publicKeyPem !== "string")
-    return { ok: false, error: "public_key_pem debe ser string" };
-
-  const pemRegex =
-    /-----BEGIN (?:PUBLIC KEY|RSA PUBLIC KEY)-----[A-Za-z0-9+\/=\s\r\n]+-----END (?:PUBLIC KEY|RSA PUBLIC KEY)-----/;
-
-  if (!pemRegex.test(publicKeyPem)) return { ok: false, error: "Formato PEM inválido" };
-  if (publicKeyPem.length > 4096)
-    return { ok: false, error: "public_key_pem demasiado grande" };
-
-  try {
-    crypto.createPublicKey(publicKeyPem);
-    return { ok: true };
-  } catch (err) {
-    console.error("createPublicKey error:", err);
-    return { ok: false, error: "Clave pública no parseable" };
+  if (!publicKeyPem || typeof publicKeyPem !== "string") {
+    return { ok: false, error: "Clave pública vacía" };
   }
+
+  // Si es ssh-rsa sin convertir, también la aceptamos.
+  if (publicKeyPem.trim().startsWith("ssh-rsa ")) {
+    return { ok: true };
+  }
+
+  // Verificar PEM básico (sin crear clave)
+  if (
+    publicKeyPem.includes("-----BEGIN PUBLIC KEY-----") &&
+    publicKeyPem.includes("-----END PUBLIC KEY-----")
+  ) {
+    return { ok: true };
+  }
+
+  if (
+    publicKeyPem.includes("-----BEGIN RSA PUBLIC KEY-----") &&
+    publicKeyPem.includes("-----END RSA PUBLIC KEY-----")
+  ) {
+    return { ok: true };
+  }
+
+  return { ok: false, error: "Formato no reconocido (debe ser ssh-rsa o PEM RSA)" };
 }
+
 
 // --------------------------- PoW ---------------------------
 const POW_DIFFICULTY = parseInt(process.env.POW_DIFFICULTY || "4", 10);
@@ -1066,42 +1078,32 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { public_key_pem, pin } = req.body;
 
-  if (!public_key_pem || typeof public_key_pem !== "string" || public_key_pem.trim() === "") {
-    return res.status(400).json({ ok: false, error: "Debe enviar una clave pública (.pub)" });
+  if (!public_key_pem || !pin) {
+    return res.status(400).json({ ok: false, error: "Faltan datos" });
   }
 
-  if (!pin || !/^\d{4,10}$/.test(pin)) {
-    return res.status(400).json({ ok: false, error: "PIN inválido (4 a 10 dígitos)" });
+  if (pin.length < 4 || pin.length > 10) {
+    return res.status(400).json({ ok: false, error: "PIN inválido" });
   }
 
-  const key = public_key_pem.trim();
+  // Intentar convertir si es formato ssh-rsa
+  let finalPem = sshToPem(public_key_pem) || public_key_pem;
 
-  // Aceptar cualquier formato válido SSH:
-  const formatosPermitidos = [
-    "ssh-rsa ",
-    "ssh-ed25519 ",
-    "ssh-dss ",
-    "ecdsa-sha2-nistp256 ",
-    "ecdsa-sha2-nistp384 ",
-    "ecdsa-sha2-nistp521 ",
-    "-----BEGIN PUBLIC KEY-----"
-  ];
-
-  if (!formatosPermitidos.some(prefix => key.startsWith(prefix))) {
+  // Verificar solo claves RSA válidas
+  let vpub = validatePublicKeyPem(finalPem);
+  if (!vpub.ok) {
     return res.status(400).json({
       ok: false,
-      error: "Formato de clave .pub no reconocido"
+      error: "La clave pública debe ser RSA (ssh-rsa o PEM). Otros formatos no se pueden usar."
     });
   }
 
-  // Fingerprint genérico (SHA-256)
-  const fingerprint = sha256(key);
+  const fingerprint = sha256(finalPem);
   const pinHash = await bcrypt.hash(pin, 10);
 
   try {
-    const r = await db.query(
-      `
-      INSERT INTO wallets (usuario_id, public_key_pem, pin_hash, fingerprint)
+    const r = await db.query(`
+      INSERT INTO wallets(usuario_id, public_key_pem, pin_hash, fingerprint)
       VALUES ($1,$2,$3,$4)
       ON CONFLICT (usuario_id) DO UPDATE
       SET public_key_pem = EXCLUDED.public_key_pem,
@@ -1109,9 +1111,7 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
           fingerprint    = EXCLUDED.fingerprint,
           updated_at     = NOW()
       RETURNING *
-      `,
-      [usuarioId, key, pinHash, fingerprint]
-    );
+    `, [usuarioId, finalPem, pinHash, fingerprint]);
 
     return res.json({ ok: true, wallet: r.rows[0] });
 
@@ -1121,13 +1121,14 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
     if (err.code === "23505") {
       return res.status(400).json({
         ok: false,
-        error: "Esta clave pública ya está registrada por otro usuario"
+        error: "Esta clave ya está registrada por otro usuario"
       });
     }
 
     return res.status(500).json({ ok: false, error: "Error registrando wallet" });
   }
 });
+
 
 
 
@@ -1209,6 +1210,150 @@ app.post("/api/usuario/venta-pin", authRequired, async (req, res) => {
       .json({ ok: false, error: "Error registrando venta" });
   }
 });
+
+
+
+
+// Helper: crea el paquete cifrado para una venta y lo devuelve como Buffer + filename
+async function createEncryptedInvoicePackage(ventaId, usuarioId) {
+  // 1) Obten datos de la venta desde la BD
+  const rVenta = await db.query(
+    `SELECT v.id, v.usuario_id, v.fecha, v.total, u.nombre AS usuario_nombre, u.email
+     FROM ventas v
+     JOIN usuarios u ON u.id = v.usuario_id
+     WHERE v.id = $1`,
+    [ventaId]
+  );
+
+  if (!rVenta.rows.length) throw new Error("Venta no encontrada");
+
+  const venta = rVenta.rows[0];
+
+  const rDetalle = await db.query(
+    `SELECT producto_id, cantidad, precio_unitario FROM venta_detalle WHERE venta_id=$1`,
+    [ventaId]
+  );
+
+  const detalle = rDetalle.rows;
+
+  // 2) Recuperar la public key del usuario (wallet)
+  const rWallet = await db.query("SELECT public_key_pem FROM wallets WHERE usuario_id=$1", [usuarioId]);
+  if (!rWallet.rows.length) throw new Error("Usuario no tiene wallet registrada");
+
+  const publicKeyPem = rWallet.rows[0].public_key_pem;
+
+  // 3) Verificar que la clave pública sea RSA (necesario para publicEncrypt)
+  let pubKeyObj;
+  try {
+    pubKeyObj = crypto.createPublicKey(publicKeyPem);
+  } catch (err) {
+    throw new Error("Clave pública no parseable");
+  }
+  if (pubKeyObj.asymmetricKeyType !== "rsa") {
+    throw new Error("Solo se soportan claves RSA para cifrar la factura. Registra una clave RSA (.pub).");
+  }
+
+  // 4) Preparar el JSON de factura
+  const invoiceObj = {
+    venta: {
+      id: venta.id,
+      fecha: venta.fecha,
+      usuario_id: venta.usuario_id,
+      usuario_nombre: venta.usuario_nombre,
+      email: venta.email,
+      total: venta.total,
+      items: detalle.map(d => ({
+        producto_id: d.producto_id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario
+      }))
+    },
+    generated_at: new Date().toISOString()
+  };
+
+  const invoiceJson = JSON.stringify(invoiceObj, null, 2);
+
+  // 5) Comprimir la factura (gzip)
+  const compressed = zlib.gzipSync(Buffer.from(invoiceJson, "utf8"));
+
+  // 6) Generar clave simétrica AES-256-GCM
+  const aesKey = crypto.randomBytes(32); // 256 bits
+  const iv = crypto.randomBytes(12); // 96-bit recommended for GCM
+
+  const cipher = crypto.createCipheriv("aes-256-gcm", aesKey, iv);
+  const ciphertext = Buffer.concat([cipher.update(compressed), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  // 7) Cifrar la clave AES con la clave pública RSA (OAEP+SHA256)
+  const encryptedKey = crypto.publicEncrypt(
+    {
+      key: publicKeyPem,
+      padding: cryptoConstants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256"
+    },
+    aesKey
+  );
+
+  // 8) Construir paquete JSON (base64 campos)
+  const packageObj = {
+    meta: {
+      venta_id: ventaId,
+      usuario_id: usuarioId,
+      algorithm: "AES-256-GCM",
+      key_encryption: "RSA-OAEP-SHA256",
+      compressed: "gzip",
+      created_at: new Date().toISOString()
+    },
+    encrypted_key: encryptedKey.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: authTag.toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+    filename: `invoice_${ventaId}.json.gz`
+  };
+
+  const packageJson = JSON.stringify(packageObj);
+  const packageBuffer = Buffer.from(packageJson, "utf8");
+
+  // Optional: puedes devolver packageBuffer directamente o comprimirlo de nuevo.
+  // Aquí devolvemos un .invoice (json) que contiene el contenido cifrado en base64.
+  const outFilename = `invoice_${ventaId}.invoice`;
+  return { buffer: packageBuffer, filename: outFilename };
+}
+
+// Generar y descargar paquete cifrado de factura
+app.post("/api/usuario/invoice-generate", authRequired, async (req, res) => {
+  const usuarioId = req.user.id;
+  let ventaId = req.body?.ventaId;
+
+  if (!ventaId) {
+    return res.status(400).json({ ok: false, error: "ventaId faltante" });
+  }
+
+  try {
+    // Verificar propiedad de la venta
+    const r = await db.query("SELECT usuario_id FROM ventas WHERE id=$1", [ventaId]);
+
+    if (!r.rows.length) {
+      return res.status(404).json({ ok: false, error: "Venta no encontrada" });
+    }
+
+    if (r.rows[0].usuario_id !== usuarioId) {
+      return res.status(403).json({ ok: false, error: "No autorizado" });
+    }
+
+    // Crear paquete
+    const pkg = await createEncryptedInvoicePackage(ventaId, usuarioId);
+
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${pkg.filename}"`);
+    return res.send(pkg.buffer);
+
+  } catch (err) {
+    console.error("Error en invoice-generate:", err);
+    return res.status(500).json({ ok: false, error: err.message || "Error generando factura" });
+  }
+});
+
 
 // --------------------------- GET WALLET USER ---------------------------
 app.get("/api/wallet/me", authRequired, async (req, res) => {

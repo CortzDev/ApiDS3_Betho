@@ -145,9 +145,6 @@ btnRegistrarWallet.onclick = () => {
 };
 
 // =========================================
-// GUARDAR WALLET EN SERVIDOR
-// =========================================
-// =========================================
 // GUARDAR WALLET EN SERVIDOR (.pub)
 // =========================================
 document.getElementById("btnSaveWallet").onclick = async () => {
@@ -163,7 +160,6 @@ document.getElementById("btnSaveWallet").onclick = async () => {
     return alertaError("El PIN debe tener entre 4 y 8 dígitos");
   }
 
-  // sigue siendo formato PEM internamente!
   const publicKeyPub = await file.text();
 
   const res = await fetch("/api/wallet/register", {
@@ -181,7 +177,6 @@ document.getElementById("btnSaveWallet").onclick = async () => {
   alertaSuccess("Wallet registrada correctamente");
   document.getElementById("modalCrearWallet").style.display = "none";
 };
-
 
 // =========================================
 // PEDIR PIN ANTES DE COMPRAR
@@ -217,6 +212,7 @@ function pedirPIN() {
 
 // =========================================
 // REGISTRAR VENTA (usa wallet + PIN del servidor)
+// + DESCARGAR FACTURA CIFRADA (.invoice)
 // =========================================
 btnComprar.onclick = async () => {
 
@@ -233,10 +229,7 @@ btnComprar.onclick = async () => {
     precio_unitario: p.precio
   }));
 
-  const payload = {
-    productos: productosPayload,
-    pin
-  };
+  const payload = { productos: productosPayload, pin };
 
   const res = await fetch("/api/usuario/venta-pin", {
     method: "POST",
@@ -254,9 +247,46 @@ btnComprar.onclick = async () => {
   }
 
   alertaSuccess("Venta procesada correctamente ✔");
+
+  // Reset carrito
   carrito = [];
   actualizarCarrito();
   cargarProductos();
+
+  // ======================================================
+  // DESCARGAR FACTURA CIFRADA DESDE EL SERVIDOR
+  // ======================================================
+  try {
+    const dlRes = await fetch("/api/usuario/invoice-generate", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ventaId: data.ventaId })
+    });
+
+    if (!dlRes.ok) {
+      const err = await dlRes.json().catch(() => ({}));
+      return alertaWarn("Factura generada, pero no se pudo descargar: " + (err.error || "Error desconocido"));
+    }
+
+    const blob = await dlRes.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `invoice_${data.ventaId}.invoice`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    alertaSuccess("Factura cifrada descargada ✔");
+
+  } catch (err) {
+    console.error("Error descargando factura:", err);
+    alertaWarn("No se pudo descargar la factura.");
+  }
 };
 
 // =========================================
