@@ -65,6 +65,9 @@ const helmetOptions = {
 // --------------------------- App setup ---------------------------
 const app = express();
 
+// ✅ CAMBIO 1: necesario para evitar error de X-Forwarded-For / express-rate-limit
+app.set("trust proxy", 1);
+
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
   res.setHeader("Pragma", "no-cache");
@@ -75,11 +78,17 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// --------------------------- CORS ---------------------------
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (FRONTEND_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("CORS policy: origin no permitida"), false);
+
+    if (FRONTEND_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // ✅ CAMBIO 2 aplicado: no lanzar error, solo rechazar sin crash
+    return callback(null, false);
   },
   credentials: true,
 }));
@@ -138,6 +147,7 @@ function validatePublicKeyPem(publicKeyPem) {
 
   const pemRegex =
     /-----BEGIN (?:PUBLIC KEY|RSA PUBLIC KEY)-----[A-Za-z0-9+\/=\s\r\n]+-----END (?:PUBLIC KEY|RSA PUBLIC KEY)-----/;
+
   if (!pemRegex.test(publicKeyPem)) return { ok: false, error: "Formato PEM inválido" };
   if (publicKeyPem.length > 4096)
     return { ok: false, error: "public_key_pem demasiado grande" };
@@ -173,7 +183,7 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000, pendi
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-
+    
     const q = pendingId
       ? `SELECT id, data FROM pending_blocks WHERE id = $1 FOR UPDATE`
       : `SELECT id, data FROM pending_blocks ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED`;
@@ -213,8 +223,8 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000, pendi
     }
 
     const encryptedData = encryptJSON(payload);
-
     const now = new Date().toISOString();
+
     await client.query(
       `INSERT INTO blockchain (nonce, data, hash_actual, hash_anterior, fecha)
        VALUES ($1,$2,$3,$4,$5)`,
@@ -240,7 +250,6 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000, pendi
     client.release();
   }
 }
-
 // --------------------------- Registrar Bloques ---------------------------
 async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {}) {
   const timestamp = new Date().toISOString();
@@ -1486,7 +1495,6 @@ app.get("/usuario/dashboard", (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, "public")));
-
 // --------------------------- INIT DB ---------------------------
 async function initDb() {
   await db.query(`
