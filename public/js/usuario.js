@@ -147,14 +147,24 @@ btnRegistrarWallet.onclick = () => {
 // =========================================
 // GUARDAR WALLET EN SERVIDOR
 // =========================================
+// =========================================
+// GUARDAR WALLET EN SERVIDOR (.pub)
+// =========================================
 document.getElementById("btnSaveWallet").onclick = async () => {
   const file = document.getElementById("walletPubKey").files[0];
   const pin  = document.getElementById("walletPin").value;
 
-  if (!file) return alertaError("Selecciona una clave pública (.pem)");
-  if (!/^\d{4,8}$/.test(pin)) return alertaError("El PIN debe tener entre 4 y 8 dígitos");
+  if (!file) return alertaError("Selecciona una clave pública (.pub)");
+  if (!file.name.endsWith(".pub")) {
+    return alertaError("El archivo debe terminar en .pub");
+  }
 
-  const publicKeyPem = await file.text();
+  if (!/^\d{4,8}$/.test(pin)) {
+    return alertaError("El PIN debe tener entre 4 y 8 dígitos");
+  }
+
+  // sigue siendo formato PEM internamente!
+  const publicKeyPub = await file.text();
 
   const res = await fetch("/api/wallet/register", {
     method: "POST",
@@ -162,7 +172,7 @@ document.getElementById("btnSaveWallet").onclick = async () => {
       "Authorization": "Bearer " + token,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ public_key_pem: publicKeyPem, pin })
+    body: JSON.stringify({ public_key_pem: publicKeyPub, pin })
   });
 
   const data = await res.json();
@@ -171,6 +181,7 @@ document.getElementById("btnSaveWallet").onclick = async () => {
   alertaSuccess("Wallet registrada correctamente");
   document.getElementById("modalCrearWallet").style.display = "none";
 };
+
 
 // =========================================
 // PEDIR PIN ANTES DE COMPRAR

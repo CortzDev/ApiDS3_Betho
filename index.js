@@ -3,6 +3,7 @@
  */
 
 require("dotenv").config();
+const { sshToPem } = require("./middlewares/sshToPem.js");
 const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
@@ -1058,42 +1059,80 @@ app.post("/api/mine", authRequired, adminOnly, async (req, res) => {
 });
 
 // --------------------------- WALLET REGISTER ---------------------------
+// ------------------------------------------
+// WALLET REGISTER (usa public_key_pub)
+// ------------------------------------------
 app.post("/api/wallet/register", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { public_key_pem, pin } = req.body;
 
-  if (!public_key_pem || !pin) {
-    return res.status(400).json({ ok: false, error: "Faltan datos" });
+  // ---------------- VALIDACIONES BÁSICAS ----------------
+  if (!public_key_pem || typeof public_key_pem !== "string" || public_key_pem.trim() === "") {
+    return res.status(400).json({ ok: false, error: "Debe enviar la clave pública (.pub)" });
   }
 
-  if (pin.length < 4 || pin.length > 10)
-    return res.status(400).json({ ok: false, error: "PIN inválido" });
+  if (!pin || typeof pin !== "string" || pin.length < 4 || pin.length > 10) {
+    return res.status(400).json({ ok: false, error: "PIN inválido (4 a 10 números)" });
+  }
 
-  const vpub = validatePublicKeyPem(public_key_pem);
-  if (!vpub.ok)
-    return res.status(400).json({ ok: false, error: "Clave PEM inválida" });
+  // ---------------- CONVERSIÓN AUTOMÁTICA SSH → PEM ----------------
+  let finalPem = public_key_pem.trim();
 
-  const fingerprint = sha256(public_key_pem);
+  const converted = sshToPem(finalPem); // convierte ssh-rsa AAAA...
+  if (converted) {
+    console.log("🔄 Clave SSH convertida correctamente a PEM.");
+    finalPem = converted;
+  }
+
+  // ---------------- VALIDAR FORMATO PEM ----------------
+  const vpub = validatePublicKeyPem(finalPem);
+  if (!vpub.ok) {
+    console.error("❌ Clave pública inválida:", vpub.error);
+    return res.status(400).json({
+      ok: false,
+      error: "Clave pública inválida. Asegúrate de subir un archivo .pub válido"
+    });
+  }
+
+  // ---------------- FINGERPRINT + PIN ----------------
+  const fingerprint = sha256(finalPem);
   const pinHash = await bcrypt.hash(pin, 10);
 
+  // ---------------- GUARDAR WALLET ----------------
   try {
     const r = await db.query(
       `
       INSERT INTO wallets (usuario_id, public_key_pem, pin_hash, fingerprint)
       VALUES ($1,$2,$3,$4)
       ON CONFLICT (usuario_id) DO UPDATE
-      SET public_key_pem=$2, pin_hash=$3, fingerprint=$4, updated_at=NOW()
+      SET public_key_pem = EXCLUDED.public_key_pem,
+          pin_hash       = EXCLUDED.pin_hash,
+          fingerprint    = EXCLUDED.fingerprint,
+          updated_at     = NOW()
       RETURNING *
-    `,
-      [usuarioId, public_key_pem, pinHash, fingerprint],
+      `,
+      [usuarioId, finalPem, pinHash, fingerprint]
     );
 
-    res.json({ ok: true, wallet: r.rows[0] });
+    return res.json({ ok: true, wallet: r.rows[0] });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: "Error registrando wallet" });
+    console.error("❌ Error al guardar wallet:", err);
+
+    if (err.code === "23505") {
+      return res.status(400).json({
+        ok: false,
+        error: "Esta clave pública ya está registrada por otro usuario"
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: "Error interno al registrar wallet"
+    });
   }
 });
+
 
 // --------------------------- VENTA CON PIN ---------------------------
 app.post("/api/usuario/venta-pin", authRequired, async (req, res) => {
@@ -1603,17 +1642,32 @@ async function initDb() {
     );
   `);
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS wallets (
-      id SERIAL PRIMARY KEY,
-      usuario_id INT NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
-      public_key_pem TEXT NOT NULL,
-      pin_hash TEXT NOT NULL,
-      fingerprint TEXT UNIQUE NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
+ await db.query(`
+  CREATE TABLE IF NOT EXISTS wallets (
+    id SERIAL PRIMARY KEY,
+    usuario_id INT NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+    public_key_pem TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    fingerprint TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
+await db.query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint 
+      WHERE conname = 'unique_public_key'
+    ) THEN
+      ALTER TABLE wallets
+      ADD CONSTRAINT unique_public_key UNIQUE (public_key_pem);
+    END IF;
+  END$$;
+`);
+;
 
   const r = await db.query("SELECT COUNT(*) FROM roles");
   if (parseInt(r.rows[0].count) === 0) {
