@@ -1,8 +1,8 @@
 // =========================================
-// usuario.js — Compra con PIN + Wallet del servidor
+// usuario.js — Usuario + Wallet + PDF Invoice
 // =========================================
 
-// Validación de sesión
+// VALIDACIÓN SESIÓN
 const token = localStorage.getItem("token");
 const rol   = localStorage.getItem("rol");
 
@@ -10,7 +10,7 @@ if (!token || rol !== "usuario") {
   window.location.href = "/login.html";
 }
 
-// Referencias DOM
+// DOM
 const tablaProductos = document.getElementById("tablaProductos");
 const tablaCarrito   = document.getElementById("tablaCarrito");
 const totalSpan      = document.getElementById("total");
@@ -19,19 +19,39 @@ const btnComprar     = document.getElementById("btnComprar");
 const btnRegistrarWallet = document.getElementById("btnRegistrarWallet");
 
 let carrito = [];
+let lastDecryptedJSON = null;
 
-// Toast helpers
-function alertaSuccess(m){ toastSuccess(m); }
-function alertaError(m)  { toastError(m); }
-function alertaWarn(m)   { toastInfo(m); }
+// ---------------- TOASTS -----------------
+function toast(msg, type="info"){
+  const id = "t" + Date.now();
+  const bg = type==="success" ? "bg-success text-white"
+           : type==="danger" ? "bg-danger text-white"
+           : type==="warning"? "bg-warning text-dark"
+           : "bg-info text-dark";
 
-// =========================================
-// LOGOUT
-// =========================================
+  const html = `
+  <div id="${id}" class="toast ${bg} border-0" data-bs-delay="4000">
+    <div class="d-flex">
+      <div class="toast-body">${msg}</div>
+      <button class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>`;
+
+  document.getElementById("toastContainer").insertAdjacentHTML("beforeend", html);
+  const t = new bootstrap.Toast(document.getElementById(id));
+  t.show();
+}
+function alertaSuccess(m){ toast(m,"success"); }
+function alertaError(m){ toast(m,"danger"); }
+function alertaWarn(m){ toast(m,"warning"); }
+
+
+// ---------------- LOGOUT -----------------
 btnLogout.onclick = () => {
   localStorage.clear();
   window.location.href = "/login.html";
 };
+
 
 // =========================================
 // CARGAR PRODUCTOS
@@ -44,10 +64,7 @@ async function cargarProductos() {
   const data = await res.json();
   tablaProductos.innerHTML = "";
 
-  if (!data.ok) {
-    alertaError("Error cargando productos");
-    return;
-  }
+  if (!data.ok) return alertaError("Error cargando productos");
 
   data.productos.forEach(p => {
     tablaProductos.insertAdjacentHTML("beforeend", `
@@ -70,6 +87,7 @@ async function cargarProductos() {
   });
 }
 
+
 // =========================================
 // AGREGAR AL CARRITO
 // =========================================
@@ -80,24 +98,20 @@ document.addEventListener("click", e => {
     const precio = parseFloat(e.target.dataset.precio);
     const stock  = parseInt(e.target.dataset.stock);
 
-    agregarCarrito(id, nombre, precio, stock);
+    const item = carrito.find(p => p.id === id);
+
+    if (item) {
+      if (item.cantidad + 1 > stock)
+        return alertaError("Stock insuficiente");
+      item.cantidad++;
+    } else {
+      carrito.push({ id, nombre, precio, cantidad: 1 });
+    }
+
+    actualizarCarrito();
   }
 });
 
-function agregarCarrito(id, nombre, precio, stock) {
-  const item = carrito.find(i => i.id === id);
-
-  if (item) {
-    if (item.cantidad + 1 > stock) {
-      return alertaError("Stock insuficiente.");
-    }
-    item.cantidad++;
-  } else {
-    carrito.push({ id, nombre, precio, cantidad: 1 });
-  }
-
-  actualizarCarrito();
-}
 
 // =========================================
 // ACTUALIZAR CARRITO
@@ -122,8 +136,9 @@ function actualizarCarrito() {
   totalSpan.textContent = total.toFixed(2);
 }
 
+
 // =========================================
-// VERIFICAR WALLET EN SERVIDOR
+// VERIFICAR SI EL USUARIO TIENE WALLET
 // =========================================
 async function verificarWallet() {
   const res = await fetch("/api/wallet/me", {
@@ -131,55 +146,48 @@ async function verificarWallet() {
   });
 
   const data = await res.json();
-
   if (!data.ok || !data.wallet) {
     document.getElementById("modalCrearWallet").style.display = "flex";
   }
 }
 
-// =========================================
-// REGISTRAR WALLET MANUALMENTE (BOTÓN)
-// =========================================
 btnRegistrarWallet.onclick = () => {
   document.getElementById("modalCrearWallet").style.display = "flex";
 };
 
+
 // =========================================
-// GUARDAR WALLET EN SERVIDOR (.pub)
+// GUARDAR WALLET (.pub)
 // =========================================
 document.getElementById("btnSaveWallet").onclick = async () => {
   const file = document.getElementById("walletPubKey").files[0];
   const pin  = document.getElementById("walletPin").value;
 
   if (!file) return alertaError("Selecciona una clave pública (.pub)");
-  if (!file.name.endsWith(".pub")) {
-    return alertaError("El archivo debe terminar en .pub");
-  }
+  if (!/\.pub$/.test(file.name)) return alertaError("Debe ser archivo .pub");
+  if (!/^\d{4,8}$/.test(pin)) return alertaError("PIN inválido");
 
-  if (!/^\d{4,8}$/.test(pin)) {
-    return alertaError("El PIN debe tener entre 4 y 8 dígitos");
-  }
-
-  const publicKeyPub = await file.text();
+  const pub = await file.text();
 
   const res = await fetch("/api/wallet/register", {
-    method: "POST",
-    headers: {
+    method:"POST",
+    headers:{
       "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
+      "Content-Type":"application/json"
     },
-    body: JSON.stringify({ public_key_pem: publicKeyPub, pin })
+    body: JSON.stringify({ public_key_pem: pub, pin })
   });
 
   const data = await res.json();
   if (!data.ok) return alertaError(data.error);
 
-  alertaSuccess("Wallet registrada correctamente");
+  alertaSuccess("Wallet registrada ✔");
   document.getElementById("modalCrearWallet").style.display = "none";
 };
 
+
 // =========================================
-// PEDIR PIN ANTES DE COMPRAR
+// PEDIR PIN (PROMESA)
 // =========================================
 function pedirPIN() {
   const modal = document.getElementById("modalPin");
@@ -198,27 +206,25 @@ function pedirPIN() {
 
     document.getElementById("btnPinContinue").onclick = () => {
       const pin = input.value.trim();
-
       if (!/^\d{4,8}$/.test(pin)) {
         alertaWarn("PIN inválido");
         return;
       }
-
       modal.style.display = "none";
       resolve(pin);
     };
+
   });
 }
 
+
+
 // =========================================
-// REGISTRAR VENTA (usa wallet + PIN del servidor)
-// + DESCARGAR FACTURA CIFRADA (.invoice)
+// REGISTRAR COMPRA (venta-pin)
 // =========================================
 btnComprar.onclick = async () => {
 
-  if (carrito.length === 0) {
-    return alertaWarn("El carrito está vacío.");
-  }
+  if (carrito.length === 0) return alertaWarn("Tu carrito está vacío");
 
   const pin = await pedirPIN();
   if (!pin) return;
@@ -229,65 +235,176 @@ btnComprar.onclick = async () => {
     precio_unitario: p.precio
   }));
 
-  const payload = { productos: productosPayload, pin };
-
   const res = await fetch("/api/usuario/venta-pin", {
-    method: "POST",
-    headers: {
+    method:"POST",
+    headers:{
       "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
+      "Content-Type":"application/json"
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({ productos: productosPayload, pin })
   });
 
   const data = await res.json();
+  if (!data.ok) return alertaError(data.error);
 
-  if (!data.ok) {
-    return alertaError(data.error || "Error procesando la venta");
-  }
+  alertaSuccess("Venta completada ✔");
 
-  alertaSuccess("Venta procesada correctamente ✔");
-
-  // Reset carrito
   carrito = [];
   actualizarCarrito();
   cargarProductos();
 
-  // ======================================================
-  // DESCARGAR FACTURA CIFRADA DESDE EL SERVIDOR
-  // ======================================================
+  // DESCARGAR FACTURA .invoice
   try {
-    const dlRes = await fetch("/api/usuario/invoice-generate", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + token,
-        "Content-Type": "application/json"
+    const dl = await fetch("/api/usuario/invoice-generate", {
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+token,
+        "Content-Type":"application/json"
       },
       body: JSON.stringify({ ventaId: data.ventaId })
     });
 
-    if (!dlRes.ok) {
-      const err = await dlRes.json().catch(() => ({}));
-      return alertaWarn("Factura generada, pero no se pudo descargar: " + (err.error || "Error desconocido"));
+    if (!dl.ok) {
+      return alertaWarn("Factura generada, pero no descargada");
     }
 
-    const blob = await dlRes.blob();
+    const blob = await dl.blob();
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `invoice_${data.ventaId}.invoice`;
-    document.body.appendChild(a);
     a.click();
-    a.remove();
+
     URL.revokeObjectURL(url);
 
     alertaSuccess("Factura cifrada descargada ✔");
 
   } catch (err) {
-    console.error("Error descargando factura:", err);
-    alertaWarn("No se pudo descargar la factura.");
+    console.error(err);
+    alertaWarn("Error descargando factura");
   }
 };
+
+
+// =============================================================
+//      DESENCRIPTAR FACTURA (.invoice + .pem)
+// =============================================================
+
+// Abrir modal
+document.getElementById("btnDecryptModal").onclick = () => {
+  document.getElementById("modalDecrypt").style.display = "flex";
+};
+
+// Cerrar modal
+document.getElementById("closeDecryptModal").onclick = () => {
+  document.getElementById("modalDecrypt").style.display = "none";
+};
+
+
+// DESENCRIPTAR FACTURA
+document.getElementById("btnDecryptStart").onclick = async () => {
+
+  const fileInvoice = document.getElementById("decryptInvoiceFile").files[0];
+  const fileKey     = document.getElementById("decryptPrivateKey").files[0];
+  const output      = document.getElementById("decryptOutput");
+  const pdfBtn      = document.getElementById("btnDownloadPDF");
+
+  if (!fileInvoice) return alertaError("Selecciona archivo .invoice");
+  if (!fileKey)     return alertaError("Selecciona tu clave privada .pem");
+
+  try {
+    const invoiceText = await fileInvoice.text();
+    const pkg = JSON.parse(invoiceText);
+
+    const privatePem = await fileKey.text();
+
+    // 1) Desencriptar clave AES con RSA-OAEP
+    const aesKey = crypto.privateDecrypt(
+      {
+        key: privatePem,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256"
+      },
+      Buffer.from(pkg.encrypted_key, "base64")
+    );
+
+    // 2) Desencriptar GCM
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      aesKey,
+      Buffer.from(pkg.iv, "base64")
+    );
+    decipher.setAuthTag(Buffer.from(pkg.tag, "base64"));
+
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(pkg.ciphertext, "base64")),
+      decipher.final()
+    ]);
+
+    // 3) Descomprimir GZIP
+    const decompressed = pako.ungzip(decrypted, { to: "string" });
+
+    // Mostrar JSON
+    output.style.display = "block";
+    output.textContent = decompressed;
+
+    lastDecryptedJSON = JSON.parse(decompressed);
+    pdfBtn.style.display = "block";
+
+    alertaSuccess("Factura desencriptada ✔");
+
+  } catch (err) {
+    console.error(err);
+    alertaError("Error al desencriptar factura");
+  }
+};
+
+
+// =============================================================
+//           GENERAR PDF DESDE FACTURA DESENCRIPTADA
+// =============================================================
+document.getElementById("btnDownloadPDF").onclick = () => {
+
+  if (!lastDecryptedJSON)
+    return alertaError("No hay factura desencriptada");
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  const v = lastDecryptedJSON.venta;
+  let y = 10;
+
+  doc.setFontSize(18);
+  doc.text("FACTURA DE COMPRA", 10, y); y += 10;
+
+  doc.setFontSize(12);
+  doc.text(`Factura ID: ${v.id}`, 10, y); y += 6;
+  doc.text(`Fecha: ${v.fecha}`, 10, y); y += 6;
+  doc.text(`Usuario: ${v.usuario_nombre}`, 10, y); y += 6;
+  doc.text(`Correo: ${v.email}`, 10, y); y += 10;
+
+  doc.setFontSize(14);
+  doc.text("PRODUCTOS:", 10, y); y += 8;
+
+  doc.setFontSize(12);
+  v.items.forEach(item => {
+    doc.text(
+      `Producto ${item.producto_id}  | Cant: ${item.cantidad}  | $${item.precio_unitario}`,
+      10, y
+    );
+    y += 6;
+    if (y > 270) { doc.addPage(); y = 10; }
+  });
+
+  y += 10;
+  doc.setFontSize(14);
+  doc.text(`TOTAL: $${v.total}`, 10, y);
+
+  doc.save(`factura_${v.id}.pdf`);
+};
+
+
 
 // =========================================
 // INICIO

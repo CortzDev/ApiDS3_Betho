@@ -7,6 +7,9 @@
 
   <link rel="stylesheet" href="/css/bootstrap.min.css">
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <style>
     body {
       background: linear-gradient(135deg, #4b79a1, #283e51);
@@ -31,136 +34,121 @@
       overflow: hidden;
     }
 
-    h2, h4, h3 {
-      color: #333;
-      font-weight: 600;
-    }
+    h2, h4, h3 { color: #333; font-weight: 600; }
 
     .btn-custom {
       background: #283e51;
       color: white;
       transition: .3s;
     }
-    .btn-custom:hover {
-      background: #4b79a1;
-      color: white;
-    }
+    .btn-custom:hover { background:#4b79a1; color:white; }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-8px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from { opacity:0; transform:translateY(-8px); }
+      to   { opacity:1; transform:translateY(0); }
     }
 
-    /* ---------------- MODALES ---------------- */
+    /* ----------- MODAL GENÉRICO ----------- */
     .modal-overlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
+      position: fixed; top:0; left:0;
+      width:100%; height:100%;
+      background:rgba(0,0,0,0.6);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:2000;
     }
-
     .modal-box {
-      width: 450px;
-      background: white;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-      animation: modalFade .25s ease-in-out;
+      width:480px;
+      background:white;
+      border-radius:10px;
+      overflow:hidden;
+      box-shadow:0 10px 25px rgba(0,0,0,0.25);
+      animation:modalFade .25s;
     }
-
     .modal-header {
-      background: #0d6efd;
-      color: white;
-      padding: 15px;
-      font-size: 18px;
-      font-weight: bold;
+      background:#0d6efd;
+      color:white;
+      padding:15px;
+      font-size:18px;
+      font-weight:bold;
     }
-
-    .modal-body { padding: 20px; }
+    .modal-body { padding:20px; }
     .modal-footer {
-      padding: 15px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
+      padding:15px;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
     }
-
-    .btn-primary, .btn-secondary {
-      padding: 8px 18px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
     @keyframes modalFade {
-      from { opacity: 0; transform: scale(.95); }
-      to   { opacity: 1; transform: scale(1); }
+      from { opacity:0; transform:scale(.95); }
+      to   { opacity:1; transform:scale(1); }
     }
+
+    /* salida del desencriptado */
+    #decryptOutput {
+      white-space: pre-wrap;
+      background:#f3f3f3;
+      padding:15px;
+      border-radius:8px;
+      max-height:300px;
+      overflow-y:auto;
+      display:none;
+    }
+
   </style>
 </head>
 
 <body>
 
-<!-- TOASTS -->
-<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 9999;"></div>
+<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:9999;"></div>
 
 <div class="dashboard-card">
 
-  <!-- ⭐ BOTÓN AGREGADO AQUÍ ⭐ -->
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Panel del Usuario</h2>
+
     <div>
+      <button id="btnDecryptModal" class="btn btn-success me-2">Desencriptar Factura</button>
       <button id="btnRegistrarWallet" class="btn btn-warning me-2">Registrar Wallet</button>
       <button id="btnLogout" class="btn btn-danger">Cerrar sesión</button>
     </div>
   </div>
-  <!-- FIN BOTÓN -->
 
   <hr>
 
-  <!-- PRODUCTOS -->
   <h4 class="mt-3">Productos disponibles</h4>
+
   <div class="table-responsive">
     <table class="table table-striped shadow-sm">
       <thead class="table-dark">
       <tr>
-        <th>Producto</th>
-        <th>Descripción</th>
-        <th>Precio</th>
-        <th>Stock</th>
-        <th>Acción</th>
+        <th>Producto</th><th>Descripción</th><th>Precio</th><th>Stock</th><th>Acción</th>
       </tr>
       </thead>
       <tbody id="tablaProductos"></tbody>
     </table>
   </div>
 
-  <!-- CARRITO -->
   <h4 class="mt-4">Carrito</h4>
+
   <div class="table-responsive">
     <table class="table table-bordered shadow-sm">
       <thead class="table-secondary">
-      <tr>
-        <th>Producto</th>
-        <th>Cantidad</th>
-        <th>Subtotal</th>
-      </tr>
+      <tr><th>Producto</th><th>Cantidad</th><th>Subtotal</th></tr>
       </thead>
       <tbody id="tablaCarrito"></tbody>
     </table>
   </div>
 
-  <!-- TOTAL -->
   <h3 class="mt-3">Total: $<span id="total">0.00</span></h3>
 
   <button class="btn btn-custom w-100 mt-3" id="btnComprar">Registrar Venta</button>
 
 </div>
 
-<!-- Modal: INGRESAR PIN -->
+
+<!-- ------------------- MODAL: INGRESAR PIN ------------------- -->
 <div id="modalPin" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">Ingrese su PIN</div>
@@ -175,18 +163,19 @@
   </div>
 </div>
 
-<!-- Modal: REGISTRO DE WALLET -->
+
+<!-- ------------------- MODAL: REGISTRO WALLET ------------------- -->
 <div id="modalCrearWallet" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">Registrar Wallet</div>
-
     <div class="modal-body">
-      <p>Sube tu <b>clave pública</b> y crea un PIN para tu wallet.</p>
 
-      <label>Clave Pública (.pub):</label>
-      <input type="file" id="walletPubKey" class="form-control" accept=".pub,.txt,.key">
+      <p>Sube tu <b>clave pública (.pub)</b> y crea un PIN.</p>
 
-      <label class="mt-3">Crear PIN (4–8 dígitos):</label>
+      <label>Clave Pública:</label>
+      <input type="file" id="walletPubKey" class="form-control" accept=".pub,.txt">
+
+      <label class="mt-3">Crear PIN:</label>
       <input type="password" id="walletPin" class="form-control" maxlength="8">
     </div>
 
@@ -196,121 +185,39 @@
   </div>
 </div>
 
+
+<!-- ------------------- MODAL: DESENCRIPTAR FACTURA ------------------- -->
+<div id="modalDecrypt" class="modal-overlay">
+  <div class="modal-box" style="width:600px;">
+    <div class="modal-header">Desencriptar Factura</div>
+
+    <div class="modal-body">
+
+      <label><b>Archivo .invoice</b></label>
+      <input type="file" id="decryptInvoiceFile" class="form-control" accept=".invoice">
+
+      <label class="mt-3"><b>Clave Privada (.pem)</b></label>
+      <input type="file" id="decryptPrivateKey" class="form-control" accept=".pem,.key">
+
+      <button id="btnDecryptStart" class="btn btn-primary w-100 mt-3">Desencriptar</button>
+
+      <pre id="decryptOutput"></pre>
+
+      <button id="btnDownloadPDF" class="btn btn-success w-100 mt-2" style="display:none;">
+        Descargar PDF
+      </button>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="closeDecryptModal">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+
 <script src="/js/bootstrap.bundle.min.js"></script>
-
-<!-- TOASTS (queda igual) -->
-<script>
-(function () {
-  function createToast({ message="", type="info", delay=4000 }) {
-    const colors = {
-      success: "bg-success text-white",
-      danger: "bg-danger text-white",
-      warning: "bg-warning text-dark",
-      info: "bg-info text-dark"
-    };
-
-    const id = "toast_" + Date.now();
-    const html = `
-      <div id="${id}" class="toast ${colors[type]} border-0" role="alert"
-           data-bs-delay="${delay}">
-        <div class="d-flex">
-          <div class="toast-body">${message}</div>
-          <button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-      </div>`;
-
-    toastContainer.insertAdjacentHTML("beforeend", html);
-
-    const toast = new bootstrap.Toast(document.getElementById(id));
-    toast.show();
-    setTimeout(() => document.getElementById(id)?.remove(), delay + 500);
-  }
-
-  window.toastInfo    = msg=> createToast({ message:msg, type:"info" });
-  window.toastSuccess = msg=> createToast({ message:msg, type:"success" });
-  window.toastError   = msg=> createToast({ message:msg, type:"danger" });
-
-})();
-</script>
-
-<!-- WALLET + PIN -->
-<script>
-async function verificarWallet() {
-  const token = localStorage.getItem("token");
-
-  const res = await fetch("/api/wallet/me", {
-    headers: { "Authorization": "Bearer " + token }
-  });
-
-  const data = await res.json();
-
-  if (!data.ok || !data.wallet) {
-    document.getElementById("modalCrearWallet").style.display = "flex";
-  }
-}
-
-// Guardar Wallet
-document.getElementById("btnSaveWallet").onclick = async () => {
-  const file = document.getElementById("walletPubKey").files[0];
-  const pin = document.getElementById("walletPin").value;
-
-  if (!file) return toastError("Selecciona una clave pública");
-  if (!pin || pin.length < 4) return toastError("El PIN debe tener mínimo 4 dígitos");
-
-  const publicKeyPem = await file.text();
-  const token = localStorage.getItem("token");
-
-  const res = await fetch("/api/wallet/register", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + token,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ public_key_pem: publicKeyPem, pin })
-  });
-
-  const data = await res.json();
-  if (!data.ok) return toastError(data.error);
-
-  toastSuccess("Wallet registrada correctamente");
-  document.getElementById("modalCrearWallet").style.display = "none";
-};
-
-// ⭐ NUEVO BOTÓN: abrir modal manualmente
-document.getElementById("btnRegistrarWallet").onclick = () => {
-  document.getElementById("modalCrearWallet").style.display = "flex";
-};
-
-// Modal PIN
-function pedirPin(callback) {
-  const modal = document.getElementById("modalPin");
-  const input = document.getElementById("pinInput");
-
-  modal.style.display = "flex";
-  input.value = "";
-  input.focus();
-
-  document.getElementById("btnPinCancel").onclick = () => modal.style.display = "none";
-
-  document.getElementById("btnPinContinue").onclick = () => {
-    const PIN = input.value.trim();
-    if (PIN.length < 4) {
-      toastError("PIN inválido");
-      return;
-    }
-    modal.style.display = "none";
-    callback(PIN);
-  };
-}
-</script>
-
-<!-- LÓGICA -->
 <script src="/js/usuario.js"></script>
-
-<script>
-// Verificar wallet al cargar la página
-document.addEventListener("DOMContentLoaded", verificarWallet);
-</script>
 
 </body>
 </html>
