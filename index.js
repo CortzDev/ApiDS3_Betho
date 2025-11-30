@@ -3,7 +3,7 @@
  */
 
 require("dotenv").config();
-const { sshToPem } = require("./middlewares/sshToPem.js");
+const { sshToPem } = require("./sshToPem.js");
 const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
@@ -1066,39 +1066,38 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { public_key_pem, pin } = req.body;
 
-  // ---------------- VALIDACIONES BÁSICAS ----------------
   if (!public_key_pem || typeof public_key_pem !== "string" || public_key_pem.trim() === "") {
-    return res.status(400).json({ ok: false, error: "Debe enviar la clave pública (.pub)" });
+    return res.status(400).json({ ok: false, error: "Debe enviar una clave pública (.pub)" });
   }
 
-  if (!pin || typeof pin !== "string" || pin.length < 4 || pin.length > 10) {
-    return res.status(400).json({ ok: false, error: "PIN inválido (4 a 10 números)" });
+  if (!pin || !/^\d{4,10}$/.test(pin)) {
+    return res.status(400).json({ ok: false, error: "PIN inválido (4 a 10 dígitos)" });
   }
 
-  // ---------------- CONVERSIÓN AUTOMÁTICA SSH → PEM ----------------
-  let finalPem = public_key_pem.trim();
+  const key = public_key_pem.trim();
 
-  const converted = sshToPem(finalPem); // convierte ssh-rsa AAAA...
-  if (converted) {
-    console.log("🔄 Clave SSH convertida correctamente a PEM.");
-    finalPem = converted;
-  }
+  // Aceptar cualquier formato válido SSH:
+  const formatosPermitidos = [
+    "ssh-rsa ",
+    "ssh-ed25519 ",
+    "ssh-dss ",
+    "ecdsa-sha2-nistp256 ",
+    "ecdsa-sha2-nistp384 ",
+    "ecdsa-sha2-nistp521 ",
+    "-----BEGIN PUBLIC KEY-----"
+  ];
 
-  // ---------------- VALIDAR FORMATO PEM ----------------
-  const vpub = validatePublicKeyPem(finalPem);
-  if (!vpub.ok) {
-    console.error("❌ Clave pública inválida:", vpub.error);
+  if (!formatosPermitidos.some(prefix => key.startsWith(prefix))) {
     return res.status(400).json({
       ok: false,
-      error: "Clave pública inválida. Asegúrate de subir un archivo .pub válido"
+      error: "Formato de clave .pub no reconocido"
     });
   }
 
-  // ---------------- FINGERPRINT + PIN ----------------
-  const fingerprint = sha256(finalPem);
+  // Fingerprint genérico (SHA-256)
+  const fingerprint = sha256(key);
   const pinHash = await bcrypt.hash(pin, 10);
 
-  // ---------------- GUARDAR WALLET ----------------
   try {
     const r = await db.query(
       `
@@ -1111,13 +1110,13 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
           updated_at     = NOW()
       RETURNING *
       `,
-      [usuarioId, finalPem, pinHash, fingerprint]
+      [usuarioId, key, pinHash, fingerprint]
     );
 
     return res.json({ ok: true, wallet: r.rows[0] });
 
   } catch (err) {
-    console.error("❌ Error al guardar wallet:", err);
+    console.error(err);
 
     if (err.code === "23505") {
       return res.status(400).json({
@@ -1126,12 +1125,10 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
       });
     }
 
-    return res.status(500).json({
-      ok: false,
-      error: "Error interno al registrar wallet"
-    });
+    return res.status(500).json({ ok: false, error: "Error registrando wallet" });
   }
 });
+
 
 
 // --------------------------- VENTA CON PIN ---------------------------
