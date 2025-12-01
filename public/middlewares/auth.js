@@ -41,6 +41,8 @@ function adminOnly(req, res, next) {
     return res.status(401).json({ ok: false, error: "No autorizado" });
   }
 
+  console.log("🔍 ROL RECIBIDO EN TOKEN:", req.user.rol);   // <── AGREGA ESTO
+
   if (req.user.rol !== "admin") {
     console.log("⛔ Acceso denegado (no es admin):", req.user.rol);
     return res.status(403).json({ ok: false, error: "No autorizado" });
@@ -48,6 +50,7 @@ function adminOnly(req, res, next) {
 
   next();
 }
+
 
 /**
  * Middleware: Solo Proveedor

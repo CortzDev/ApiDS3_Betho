@@ -1061,6 +1061,7 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   }
 });
 
+// --------------------------- PENDING BLOCKS (CORRECTO) ---------------------------
 app.get("/api/blockchain/pending", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -1079,10 +1080,12 @@ app.get("/api/blockchain/pending", authRequired, adminOnly, async (req, res) => 
     console.error("ERROR /api/blockchain/pending:", err);
     return res.status(500).json({
       ok: false,
-      error: "Error interno servidor"
+      error: "Error interno del servidor"
     });
   }
 });
+
+
 
 
 
