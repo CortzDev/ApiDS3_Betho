@@ -389,7 +389,6 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${w.fingerprint}</td>
         <td>${w.usuario}<br><small>${w.email}</small></td>
         <td>${new Date(w.created_at).toLocaleString()}</td>
-        <td><button class="btn btn-primary btn-sm">Detalle</button></td>
       `;
       tablaWallets.appendChild(tr);
     });
