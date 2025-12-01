@@ -1061,34 +1061,6 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   }
 });
 
-// --------------------------- PENDING BLOCKS (CORRECTO) ---------------------------
-app.get("/api/blockchain/pending", authRequired, adminOnly, async (req, res) => {
-  try {
-    const r = await db.query(`
-      SELECT id, data, created_at, attempted
-      FROM pending_blocks
-      ORDER BY id ASC
-    `);
-
-    return res.json({
-      ok: true,
-      count: r.rows.length,
-      pending: r.rows
-    });
-
-  } catch (err) {
-    console.error("ERROR /api/blockchain/pending:", err);
-    return res.status(500).json({
-      ok: false,
-      error: "Error interno del servidor"
-    });
-  }
-});
-
-
-
-
-
 
 // --------------------------- MINAR BLOQUE ---------------------------
 app.post("/api/mine", authRequired, adminOnly, async (req, res) => {
