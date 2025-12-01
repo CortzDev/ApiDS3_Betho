@@ -54,7 +54,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
   }
 
-
   /* ====================================================
      REFERENCIAS DOM
   ==================================================== */
@@ -66,7 +65,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const tablaBlockchain = document.getElementById("tablaBlockchain");
   const tablaWallets = document.getElementById("tablaWallets");
 
-
   /* ====================================================
      LOGOUT
   ==================================================== */
@@ -74,7 +72,6 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.clear();
     window.location.href = "/login.html";
   });
-
 
   /* ====================================================
      OCULTAR TODAS LAS SECCIONES
@@ -84,7 +81,6 @@ document.addEventListener("DOMContentLoaded", () => {
     actividadSection.style.display = "none";
     walletSection.style.display = "none";
   }
-
 
   /* ====================================================
      CHECK LLAVE PÚBLICA
@@ -98,6 +94,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return true;
   }
+
+  /* ====================================================
+     REVISAR BLOQUES PENDIENTES (NOTIFICACIÓN)
+  ==================================================== */
+  async function revisarPendientes() {
+  try {
+    const res = await fetch("/api/blockchain/pending", {
+      headers: { "Authorization": "Bearer " + token }
+    });
+
+    const data = await res.json();
+
+    const dot = document.getElementById("pendingDot");
+    const countSpan = document.getElementById("pendingCount");
+
+    if (data.ok && data.count > 0) {
+      countSpan.textContent = data.count;   // ← muestra número real
+      dot.style.display = "inline-flex";    // aparece
+    } else {
+      dot.style.display = "none";           // se oculta si no hay nada
+    }
+
+  } catch (err) {
+    console.error("Error revisando pendientes:", err);
+  }
+}
+
+// Revisar pendientes cada 10s
+setInterval(revisarPendientes, 10000);
 
 
   /* ====================================================
@@ -142,7 +167,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btnProveedor").addEventListener("click", cargarProveedores);
-
 
   /* ====================================================
      CARGAR ACTIVIDAD (BLOCKCHAIN)
@@ -204,7 +228,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.getElementById("btnActividad").addEventListener("click", cargarActividad);
-
 
   /* ====================================================
      DETALLE DEL BLOQUE
@@ -286,7 +309,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-
   /* ====================================================
      MINAR BLOQUE
   ==================================================== */
@@ -319,7 +341,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-
   /* ====================================================
      VALIDAR CADENA
   ==================================================== */
@@ -346,85 +367,71 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-
   /* ====================================================
-     ====  CARGAR WALLETS  =====
-  ==================================================== */
-/* ====================================================
-   ====  CARGAR WALLETS REGISTRADAS  =====
-==================================================== */
-/* ====================================================
      ====  CARGAR WALLETS REGISTRADAS  =====
-==================================================== */
-async function cargarWallets() {
-  if (!checkPublicKey()) return;
-
-  ocultarTodo();
-  walletSection.style.display = "block";
-  tablaWallets.innerHTML = `
-    <tr><td colspan="4" class="text-center">Cargando...</td></tr>
-  `;
-
-  try {
-    const res = await fetch("/api/wallets/registered", {
-      headers: { "Authorization": "Bearer " + token }
-    });
-
-    const data = await res.json();
-
-    if (!data.ok) {
-      tablaWallets.innerHTML = `
-        <tr><td colspan="4" class="text-danger text-center">Error al cargar wallets registradas</td></tr>
-      `;
-      return;
-    }
-
-    const wallets = data.wallets;
-    tablaWallets.innerHTML = "";
-
-    if (wallets.length === 0) {
-      tablaWallets.innerHTML = `
-        <tr><td colspan="4" class="text-center">No hay wallets registradas</td></tr>
-      `;
-      return;
-    }
-
-    wallets.forEach(w => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${w.fingerprint}</td>
-        <td>${w.usuario} <br> <small>${w.email}</small></td>
-        <td>${new Date(w.created_at).toLocaleString()}</td>
-        <td>
-          <button class="btn btn-primary btn-sm verWalletBtn" data-fp="${w.fingerprint}">
-            Ver Detalle
-          </button>
-        </td>
-      `;
-      tablaWallets.appendChild(tr);
-    });
-
-  } catch (err) {
-    console.error(err);
-    tablaWallets.innerHTML = `
-      <tr><td colspan="4" class="text-danger text-center">Error de conexión</td></tr>
-    `;
-  }
-}
-
-
-
-
-  /* ====================================================
-     EVENTO BOTÓN WALLETS
   ==================================================== */
+  async function cargarWallets() {
+    if (!checkPublicKey()) return;
+
+    ocultarTodo();
+    walletSection.style.display = "block";
+    tablaWallets.innerHTML = `
+      <tr><td colspan="4" class="text-center">Cargando...</td></tr>
+    `;
+
+    try {
+      const res = await fetch("/api/wallets/registered", {
+        headers: { "Authorization": "Bearer " + token }
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        tablaWallets.innerHTML = `
+          <tr><td colspan="4" class="text-danger text-center">
+            Error al cargar wallets registradas
+          </td></tr>
+        `;
+        return;
+      }
+
+      const wallets = data.wallets;
+      tablaWallets.innerHTML = "";
+
+      if (wallets.length === 0) {
+        tablaWallets.innerHTML = `
+          <tr><td colspan="4" class="text-center">
+            No hay wallets registradas
+          </td></tr>
+        `;
+        return;
+      }
+
+      wallets.forEach(w => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${w.fingerprint}</td>
+          <td>${w.usuario} <br> <small>${w.email}</small></td>
+          <td>${new Date(w.created_at).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-primary btn-sm verWalletBtn" data-fp="${w.fingerprint}">
+              Ver Detalle
+            </button>
+          </td>
+        `;
+        tablaWallets.appendChild(tr);
+      });
+
+    } catch (err) {
+      console.error(err);
+      tablaWallets.innerHTML = `
+        <tr><td colspan="4" class="text-danger text-center">Error de conexión</td></tr>
+      `;
+    }
+  }
+
   document.getElementById("btnWallets").addEventListener("click", cargarWallets);
 
-
-  /* ====================================================
-     LISTENER UNIVERSAL PARA BOTÓN "Ver Detalle"
-     (REEMPLAZO DE onclick= PROHIBIDO POR CSP)
-  ==================================================== */
   document.addEventListener("click", (e) => {
     if (e.target.classList.contains("verWalletBtn")) {
       const fp = e.target.dataset.fp;
@@ -433,12 +440,11 @@ async function cargarWallets() {
   });
 
   /* ====================================================
-     DETALLE DE WALLET (simple)
+     DETALLE DE WALLET
   ==================================================== */
   function verWallet(fp) {
     alert("Fingerprint: " + fp + "\n(Aquí puedes ampliar info si deseas)");
   }
-
 
   /* ====================================================
      VERIFICAR FIRMA RSA (doble click)
@@ -448,7 +454,6 @@ async function cargarWallets() {
       const id = document.getElementById("detHashActual").dataset.blockid;
       if (id) verificarFirma(id);
     });
-
 
   async function verificarFirma(id) {
     if (!checkPublicKey()) return;
@@ -478,10 +483,10 @@ async function cargarWallets() {
     }
   }
 
-
   /* ====================================================
      INICIO AUTOMÁTICO → Blockchain
   ==================================================== */
   cargarActividad();
+  revisarPendientes();
 
 });

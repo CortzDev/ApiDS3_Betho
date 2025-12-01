@@ -54,7 +54,13 @@ const helmetOptions = {
         "https://cdnjs.cloudflare.com"
       ],
       "img-src": ["'self'", "data:", "blob:", "https://www.gravatar.com"],
-      "connect-src": ["'self'", "http://localhost:3000", "https://www.gstatic.com", "data:"],
+      "connect-src": [
+        "'self'",
+        "http://localhost:3000",
+        "https://www.gstatic.com",
+        "https://cdnjs.cloudflare.com",     // ← AGREGADO
+        "data:"
+      ],
       "font-src": ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       "frame-src": ["'self'"],
       "object-src": ["'none'"]
@@ -1054,6 +1060,32 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+
+app.get("/api/blockchain/pending", authRequired, adminOnly, async (req, res) => {
+  try {
+    const r = await db.query(`
+      SELECT id, data, created_at, attempted
+      FROM pending_blocks
+      ORDER BY id ASC
+    `);
+
+    return res.json({
+      ok: true,
+      count: r.rows.length,
+      pending: r.rows
+    });
+
+  } catch (err) {
+    console.error("ERROR /api/blockchain/pending:", err);
+    return res.status(500).json({
+      ok: false,
+      error: "Error interno servidor"
+    });
+  }
+});
+
+
+
 
 // --------------------------- MINAR BLOQUE ---------------------------
 app.post("/api/mine", authRequired, adminOnly, async (req, res) => {

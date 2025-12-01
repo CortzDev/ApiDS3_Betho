@@ -1,5 +1,6 @@
 // =========================================
 // usuario.js — Usuario + Wallet + PDF Invoice
+// (Con desencriptado en frontend usando WebCrypto)
 // =========================================
 
 // VALIDACIÓN SESIÓN
@@ -157,17 +158,21 @@ btnRegistrarWallet.onclick = () => {
 
 
 // =========================================
-// GUARDAR WALLET (.pub)
+// GUARDAR WALLET (.pem)
 // =========================================
 document.getElementById("btnSaveWallet").onclick = async () => {
   const file = document.getElementById("walletPubKey").files[0];
   const pin  = document.getElementById("walletPin").value;
 
-  if (!file) return alertaError("Selecciona una clave pública (.pub)");
-  if (!/\.pub$/.test(file.name)) return alertaError("Debe ser archivo .pub");
+  if (!file) return alertaError("Selecciona una clave pública (.pem)");
+  if (!/\.pem$/i.test(file.name)) return alertaError("Debe ser archivo .pem");
   if (!/^\d{4,8}$/.test(pin)) return alertaError("PIN inválido");
 
   const pub = await file.text();
+
+  if (!pub.includes("BEGIN PUBLIC KEY")) {
+    return alertaError("El archivo no contiene una clave pública válida");
+  }
 
   const res = await fetch("/api/wallet/register", {
     method:"POST",
@@ -288,8 +293,63 @@ btnComprar.onclick = async () => {
 
 
 // =============================================================
-//      DESENCRIPTAR FACTURA (.invoice + .pem)
+//      DESENCRIPTAR FACTURA (.invoice + .pem) - FRONTEND (WebCrypto)
 // =============================================================
+
+// Helpers
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function concatUint8Arrays(a, b) {
+  const c = new Uint8Array(a.length + b.length);
+  c.set(a, 0);
+  c.set(b, a.length);
+  return c;
+}
+
+// Convert PEM (PKCS#8) text to ArrayBuffer
+function pemToArrayBuffer(pem) {
+  // remove header/footer and newlines
+  const lines = pem.trim().split(/\r?\n/);
+  // find the base64 lines between BEGIN ... and END ...
+  const base64Lines = lines.filter(line => !line.includes('BEGIN') && !line.includes('END'));
+  const base64 = base64Lines.join('');
+  return base64ToUint8Array(base64).buffer;
+}
+
+// Import private key (expects PKCS#8 "-----BEGIN PRIVATE KEY-----")
+// If user supplies PKCS#1 ("-----BEGIN RSA PRIVATE KEY-----") many browsers won't import it.
+// In that case we show a helpful error telling the user how to convert the key to PKCS#8.
+async function importPrivateKeyFromPem(pem) {
+  // detect header
+  if (pem.includes("-----BEGIN PRIVATE KEY-----")) {
+    const ab = pemToArrayBuffer(pem);
+    return await window.crypto.subtle.importKey(
+      "pkcs8",
+      ab,
+      { name: "RSA-OAEP", hash: "SHA-256" },
+      false,
+      ["decrypt"]
+    );
+  } else if (pem.includes("-----BEGIN RSA PRIVATE KEY-----")) {
+    // PKCS#1 private key detected — browsers generally don't accept pkcs1 directly.
+    // We throw a clear error telling the user how to convert it using OpenSSL:
+    throw new Error(
+      "Clave en formato PKCS#1 detectada. Convierte a PKCS#8 con:\n\n" +
+      "openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in user1priv.pem -out user1priv_pk8.pem\n\n" +
+      "Luego usa el archivo resultante (user1priv_pk8.pem) en la UI."
+    );
+  } else {
+    throw new Error("Formato PEM no reconocido. Debe contener 'BEGIN PRIVATE KEY' o 'BEGIN RSA PRIVATE KEY'.");
+  }
+}
 
 // Abrir modal
 document.getElementById("btnDecryptModal").onclick = () => {
@@ -301,8 +361,7 @@ document.getElementById("closeDecryptModal").onclick = () => {
   document.getElementById("modalDecrypt").style.display = "none";
 };
 
-
-// DESENCRIPTAR FACTURA
+// DESENCRIPTAR FACTURA usando WebCrypto
 document.getElementById("btnDecryptStart").onclick = async () => {
 
   const fileInvoice = document.getElementById("decryptInvoiceFile").files[0];
@@ -319,31 +378,58 @@ document.getElementById("btnDecryptStart").onclick = async () => {
 
     const privatePem = await fileKey.text();
 
-    // 1) Desencriptar clave AES con RSA-OAEP
-    const aesKey = crypto.privateDecrypt(
+    // 1) Importar clave privada (webcrypto) — puede lanzar si es PKCS#1 (ver mensaje)
+    let privateKey;
+    try {
+      privateKey = await importPrivateKeyFromPem(privatePem);
+    } catch (err) {
+      console.error(err);
+      alertaError(
+        "Error importando la clave privada: " + err.message +
+        "\nSi tu clave es del tipo 'RSA PRIVATE KEY', conviértela a PKCS#8 con OpenSSL:\n" +
+        "openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in user1priv.pem -out user1priv_pk8.pem"
+      );
+      return;
+    }
+
+    // 2) Desencriptar la clave AES con RSA-OAEP (la encrypted_key viene en base64)
+    const encryptedKeyBytes = base64ToUint8Array(pkg.encrypted_key).buffer;
+    const aesKeyRaw = await window.crypto.subtle.decrypt(
+      { name: "RSA-OAEP" },
+      privateKey,
+      encryptedKeyBytes
+    ); // ArrayBuffer (raw AES key bytes)
+
+    // 3) Importar clave AES para AES-GCM
+    const aesKey = await window.crypto.subtle.importKey(
+      "raw",
+      aesKeyRaw,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+
+    // 4) Preparar ciphertext + tag (pkg.ciphertext y pkg.tag están en base64 por separado)
+    const ciphertextBytes = base64ToUint8Array(pkg.ciphertext);
+    const tagBytes = base64ToUint8Array(pkg.tag);
+    const combined = concatUint8Arrays(ciphertextBytes, tagBytes);
+
+    const ivBytes = base64ToUint8Array(pkg.iv);
+
+    // 5) Desencriptar AES-GCM
+    const decryptedArrayBuffer = await window.crypto.subtle.decrypt(
       {
-        key: privatePem,
-        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-        oaepHash: "sha256"
+        name: "AES-GCM",
+        iv: ivBytes,
+        tagLength: 128
       },
-      Buffer.from(pkg.encrypted_key, "base64")
-    );
-
-    // 2) Desencriptar GCM
-    const decipher = crypto.createDecipheriv(
-      "aes-256-gcm",
       aesKey,
-      Buffer.from(pkg.iv, "base64")
+      combined.buffer
     );
-    decipher.setAuthTag(Buffer.from(pkg.tag, "base64"));
 
-    const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(pkg.ciphertext, "base64")),
-      decipher.final()
-    ]);
-
-    // 3) Descomprimir GZIP
-    const decompressed = pako.ungzip(decrypted, { to: "string" });
+    // 6) Descomprimir GZIP (pako)
+    const decryptedUint8 = new Uint8Array(decryptedArrayBuffer);
+    const decompressed = pako.ungzip(decryptedUint8, { to: "string" });
 
     // Mostrar JSON
     output.style.display = "block";
@@ -356,51 +442,163 @@ document.getElementById("btnDecryptStart").onclick = async () => {
 
   } catch (err) {
     console.error(err);
-    alertaError("Error al desencriptar factura");
+    alertaError("Error al desencriptar factura: " + (err.message || err));
   }
 };
 
 
-// =============================================================
-//           GENERAR PDF DESDE FACTURA DESENCRIPTADA
-// =============================================================
-document.getElementById("btnDownloadPDF").onclick = () => {
+// =========================================
+//    PDF PROFESIONAL TIPO SAT / AFIP
+// =========================================
+document.getElementById("btnDownloadPDF").onclick = async () => {
 
   if (!lastDecryptedJSON)
     return alertaError("No hay factura desencriptada");
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc = new jsPDF({ unit: "mm", format: "letter" });
 
   const v = lastDecryptedJSON.venta;
+
   let y = 10;
 
-  doc.setFontSize(18);
-  doc.text("FACTURA DE COMPRA", 10, y); y += 10;
+  // --------------------------------------------
+  // 1. FONDO TENUE
+  // --------------------------------------------
+  doc.setFillColor(240, 240, 240);
+  doc.rect(0, 0, 216, 279, "F");
 
-  doc.setFontSize(12);
-  doc.text(`Factura ID: ${v.id}`, 10, y); y += 6;
-  doc.text(`Fecha: ${v.fecha}`, 10, y); y += 6;
-  doc.text(`Usuario: ${v.usuario_nombre}`, 10, y); y += 6;
-  doc.text(`Correo: ${v.email}`, 10, y); y += 10;
+  // --------------------------------------------
+  // 2. LOGO
+  // --------------------------------------------
+ // try {
+ //   doc.addImage(LOGO_BASE64, "PNG", 10, 10, 40, 40);
+ // } catch (err) {
+  //  console.warn("Error cargando logo:", err);
+ // }
 
+  // --------------------------------------------
+  // 3. TÍTULO
+  // --------------------------------------------
+  doc.setFontSize(26);
+  doc.setTextColor(40, 62, 81);
+  doc.text("FACTURA ELECTRÓNICA", 125, 25, { align: "center" });
+
+  // Línea decorativa
+  doc.setDrawColor(40, 62, 81);
+  doc.setLineWidth(1.2);
+  doc.line(10, 55, 206, 55);
+
+  y = 65;
+
+  // --------------------------------------------
+  // 4. INFORMACIÓN DEL CLIENTE
+  // --------------------------------------------
   doc.setFontSize(14);
-  doc.text("PRODUCTOS:", 10, y); y += 8;
+  doc.text("Datos del Cliente", 12, y);
+  doc.setLineWidth(0.4);
+  doc.line(12, y + 2, 205, y + 2);
+  y += 10;
 
-  doc.setFontSize(12);
-  v.items.forEach(item => {
-    doc.text(
-      `Producto ${item.producto_id}  | Cant: ${item.cantidad}  | $${item.precio_unitario}`,
-      10, y
-    );
-    y += 6;
-    if (y > 270) { doc.addPage(); y = 10; }
+  doc.setFontSize(11);
+  doc.text(`Cliente: ${v.usuario_nombre}`, 12, y); y += 6;
+  doc.text(`Correo: ${v.email}`, 12, y); y += 6;
+
+  y += 4;
+  doc.setDrawColor(200);
+  doc.line(10, y, 206, y);
+  y += 8;
+
+  // --------------------------------------------
+  // 5. DATOS DE FACTURA (tipo SAT)
+  // --------------------------------------------
+  doc.setFontSize(14);
+  doc.setTextColor(40, 62, 81);
+  doc.text("Datos de la Factura", 12, y);
+  doc.setLineWidth(0.4);
+  doc.line(12, y + 2, 205, y + 2);
+  y += 10;
+
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Factura ID: ${v.id}`, 12, y); y += 6;
+  doc.text(`Fecha: ${v.fecha}`, 12, y); y += 6;
+
+  y += 4;
+  doc.line(10, y, 206, y);
+  y += 10;
+
+  // --------------------------------------------
+  // 6. TABLA DE PRODUCTOS (formato AFIP)
+  // --------------------------------------------
+  doc.setFontSize(14);
+  doc.text("Productos", 12, y);
+  y += 6;
+
+  // ENCABEZADO
+  doc.setFillColor(230, 230, 230);
+  doc.rect(10, y, 196, 10, "F");
+
+  doc.setFontSize(11);
+  doc.setFont(undefined, "bold");
+  doc.text("Producto", 15, y + 7);
+  doc.text("Cantidad", 110, y + 7);
+  doc.text("Precio", 160, y + 7);
+
+  y += 14;
+
+  doc.setFont(undefined, "normal");
+
+  v.items.forEach((item, idx) => {
+
+    // alternar fondo
+    if (idx % 2 === 0) {
+      doc.setFillColor(247, 247, 247);
+      doc.rect(10, y - 6, 196, 10, "F");
+    }
+
+    doc.text(`Producto ${item.producto_id}`, 15, y);
+    doc.text(String(item.cantidad), 115, y);
+    doc.text(`$${item.precio_unitario}`, 160, y);
+
+    y += 10;
+
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
   });
 
+  y += 4;
+  doc.line(10, y, 206, y);
   y += 10;
-  doc.setFontSize(14);
-  doc.text(`TOTAL: $${v.total}`, 10, y);
 
+  // --------------------------------------------
+  // 7. TOTAL DESTACADO
+  // --------------------------------------------
+  doc.setFontSize(18);
+  doc.setFont(undefined, "bold");
+  doc.setTextColor(40, 62, 81);
+  doc.text(`TOTAL: $${v.total}`, 12, y);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(undefined, "normal");
+
+  // --------------------------------------------
+  // 8. QR (ID de factura)
+  // --------------------------------------------
+ // const qrData = generarQR(`Factura ID: ${v.id}`);
+  //doc.addImage(qrData, "PNG", 150, y - 20, 40, 40);
+
+  //y += 50;
+
+  // --------------------------------------------
+  // 9. PIE / LEGAL
+  // --------------------------------------------
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text("Documento generado automáticamente por el sistema de facturación.", 105, 270, { align: "center" });
+
+  // Guardar
   doc.save(`factura_${v.id}.pdf`);
 };
 
@@ -411,3 +609,4 @@ document.getElementById("btnDownloadPDF").onclick = () => {
 // =========================================
 cargarProductos();
 verificarWallet();
+
