@@ -394,6 +394,10 @@ async function revisarUsuariosConectados() {
   }
 }
 
+setInterval(revisarUsuariosConectados, 5000);
+revisarUsuariosConectados();
+
+
 // Ejecutar cada 5 segundos
 setInterval(revisarUsuariosConectados, 5000);
 revisarUsuariosConectados(); // primera ejecución

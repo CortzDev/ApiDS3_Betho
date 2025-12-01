@@ -310,23 +310,31 @@ app.get("/", (req, res) =>
 // LOGIN
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body || {};
+
   try {
     const r = await db.query(
       `
-      SELECT u.id, u.nombre, u.password, r.nombre AS rol
+      SELECT u.id, u.nombre, u.password, u.ultimo_login, r.nombre AS rol
       FROM usuarios u
       JOIN roles r ON r.id = u.rol_id
       WHERE email=$1
     `,
-      [email],
+      [email]
     );
 
-    if (!r.rows.length) return res.status(400).json({ ok: false });
+    if (!r.rows.length) {
+      return res.status(400).json({ ok: false, error: "Usuario no encontrado" });
+    }
 
     const user = r.rows[0];
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ ok: false });
 
+    // Validar contraseña
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(400).json({ ok: false, error: "Credenciales incorrectas" });
+    }
+
+    // Si es proveedor → registrar si no existe
     if (user.rol === "proveedor") {
       await db.query(
         `
@@ -334,26 +342,39 @@ app.post("/api/login", async (req, res) => {
         VALUES ($1)
         ON CONFLICT (usuario_id) DO NOTHING
       `,
-        [user.id],
+        [user.id]
       );
     }
 
+    // 🔥 MARCAR USUARIO COMO ACTIVO (última actividad)
+    await db.query(
+      `
+      UPDATE usuarios 
+      SET ultimo_login = NOW()
+      WHERE id = $1
+      `,
+      [user.id]
+    );
+
+    // Generar JWT
     const token = jwt.sign(
       { id: user.id, nombre: user.nombre, rol: user.rol },
       JWT_SECRET,
-      { expiresIn: "2h" },
+      { expiresIn: "2h" }
     );
 
-    res.json({
+    return res.json({
       ok: true,
       token,
-      usuario: { id: user.id, nombre: user.nombre, rol: user.rol },
+      usuario: { id: user.id, nombre: user.nombre, rol: user.rol }
     });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false });
+    console.error("❌ ERROR /api/login:", err);
+    return res.status(500).json({ ok: false, error: "Error interno del servidor" });
   }
 });
+
 
 // PERFIL
 app.get("/api/perfil", authRequired, async (req, res) => {
@@ -1069,16 +1090,17 @@ app.get("/api/usuarios/conectados", authRequired, adminOnly, async (req, res) =>
       WHERE ultimo_login > NOW() - INTERVAL '5 minutes'
     `);
 
-    return res.json({
+    res.json({
       ok: true,
       count: parseInt(r.rows[0].total)
     });
 
   } catch (err) {
-    console.error("ERROR /usuarios/conectados:", err);
-    return res.status(500).json({ ok: false });
+    console.error("ERROR /api/usuarios/conectados:", err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
+
 
 
 
