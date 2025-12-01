@@ -70,12 +70,9 @@
       <h4 class="text-center">Admin</h4>
 
       <a href="#" id="btnProveedor">Proveedores</a>
-
       <a href="#" id="btnActividad">Actividad</a>
-        
-      
-
       <a href="#" id="btnWallets">Wallets</a>
+
       <a href="#" id="btnMine">Minar Bloque
         <span id="pendingDot"
               class="badge bg-danger p-2 ms-2"
@@ -86,13 +83,13 @@
               style="display:none;">
         </span>
       </a>
+
       <div class="text-center mt-2 mb-3">
-      <span class="text-light">Usuarios conectados:</span>
-      <span id="onlineUsers" class="badge bg-success ms-2">0</span>
-    </div>
+        <span class="text-light">Usuarios conectados:</span>
+        <span id="onlineUsers" class="badge bg-success ms-2">0</span>
+      </div>
 
-
-      <hr style="border-color: #555;">
+      <hr style="border-color:#555;">
 
       <a href="#" id="logoutBtn">Cerrar sesión</a>
     </div>
@@ -121,7 +118,6 @@
         </table>
       </div>
 
-
       <!-- ACTIVIDAD -->
       <div id="actividadSection" style="display:none;">
         <h3>Actividad del Sistema (Blockchain)</h3>
@@ -142,7 +138,6 @@
           <tbody id="tablaBlockchain"></tbody>
         </table>
       </div>
-
 
       <!-- WALLETS -->
       <div id="walletSection" style="display:none;">
@@ -178,7 +173,6 @@
       </div>
 
       <div class="modal-body">
-
         <div class="row">
           <div class="col-md-6">
             <p><strong>Operación:</strong> <span id="detOperacion"></span></p>
@@ -218,16 +212,15 @@
   </div>
 </div>
 
-
 <script src="js/bootstrap.bundle.min.js"></script>
 <script src="js/crypto-js.js"></script>
 
 <script>
-document.getElementById("btnCargarKey").addEventListener("click", ()=>{
+document.getElementById("btnCargarKey").addEventListener("click", ()=> {
   const file = document.getElementById("publicKeyInput").files[0];
   const err = document.getElementById("keyError");
   
-  if(!file){
+  if (!file) {
     err.style.display = "block";
     return;
   }
@@ -242,5 +235,7 @@ document.getElementById("btnCargarKey").addEventListener("click", ()=>{
 </script>
 
 <script src="js/dashboard.js"></script>
+<script src="js/ws-replication.js"></script>
+
 </body>
 </html>
