@@ -396,6 +396,145 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnWallets").addEventListener("click", cargarWallets);
 
+
+/* =========================
+   METRICS WIDGETS (Admin)
+   ========================= */
+
+async function actualizarMetricasAdmin() {
+  try {
+    // Usuarios conectados (endpoint existente)
+    try {
+      const rUsers = await secureFetch("/api/usuarios/conectados");
+      const dUsers = await rUsers.json();
+      if (dUsers.ok) {
+        document.getElementById("metricOnlineUsers").textContent = dUsers.count ?? 0;
+        // también actualiza el badge lateral por coherencia
+        const span = document.getElementById("onlineUsers");
+        if (span) span.textContent = dUsers.count ?? 0;
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener usuarios conectados:", e);
+    }
+
+    // Pending blocks
+    try {
+      const rPend = await secureFetch("/api/pending-blocks");
+      const dPend = await rPend.json();
+      if (dPend.ok) {
+        const count = Array.isArray(dPend.pending) ? dPend.pending.length : 0;
+        document.getElementById("metricPendingBlocks").textContent = count;
+        // también actualiza ícono lateral
+        const dot = document.getElementById("pendingDot");
+        const cnt = document.getElementById("pendingCount");
+        if (dot && cnt) {
+          if (count > 0) {
+            dot.style.display = "inline-flex";
+            cnt.style.display = "inline-block";
+            cnt.textContent = count;
+          } else {
+            dot.style.display = "none";
+            cnt.style.display = "none";
+            cnt.textContent = "";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener pending-blocks:", e);
+    }
+
+    // Wallets registradas
+    try {
+      const rW = await secureFetch("/api/wallets/registered");
+      const dW = await rW.json();
+      if (dW.ok) {
+        document.getElementById("metricWallets").textContent = (dW.wallets || []).length;
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener wallets registradas:", e);
+    }
+
+    // Blockchain — para ventas hoy, último bloque y tiempo promedio minado
+    try {
+      const rChain = await secureFetch("/api/blockchain");
+      const dChain = await rChain.json();
+      if (dChain.ok && Array.isArray(dChain.cadena)) {
+        const blocks = dChain.cadena;
+
+        // Último bloque minado (hash corto)
+        if (blocks.length) {
+          const last = blocks[blocks.length - 1];
+          const short = (last.hash_actual || "").slice(0, 12);
+          document.getElementById("metricLastBlock").textContent = short || "—";
+        } else {
+          document.getElementById("metricLastBlock").textContent = "—";
+        }
+
+        // Ventas hoy (contar bloques con operacion 'venta' con fecha hoy)
+        const today = new Date();
+        const y = today.getFullYear(), m = today.getMonth(), d = today.getDate();
+        const ventasHoy = blocks.reduce((acc, b) => {
+          const payload = b.data || {};
+          if ((payload.operacion === "venta" || payload.venta_id || payload.total) ) {
+            const fecha = new Date(b.fecha || b.created_at || b.timestamp || 0);
+            if (fecha.getFullYear() === y && fecha.getMonth() === m && fecha.getDate() === d) {
+              return acc + 1;
+            }
+          }
+          return acc;
+        }, 0);
+        document.getElementById("metricSalesToday").textContent = ventasHoy;
+
+        // Tiempo promedio de minado (promedio diff entre bloques consecutivos)
+        // Usamos últimos N blocks (si hay menos, tomamos todos)
+        const N = Math.min(30, blocks.length);
+        if (N >= 2) {
+          const recent = blocks.slice(-N);
+          const diffs = [];
+          for (let i = 1; i < recent.length; i++) {
+            const tPrev = new Date(recent[i - 1].fecha).getTime();
+            const tNow = new Date(recent[i].fecha).getTime();
+            const diffSec = Math.max(0, (tNow - tPrev) / 1000);
+            diffs.push(diffSec);
+          }
+          const avg = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+          document.getElementById("metricAvgMineTime").textContent = `${avg.toFixed(1)} s`;
+        } else {
+          document.getElementById("metricAvgMineTime").textContent = "—";
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener blockchain para métricas:", e);
+    }
+
+  } catch (err) {
+    console.error("Error actualizando métricas admin:", err);
+  }
+}
+
+// Lanza la actualización periódica y una inmediata
+actualizarMetricasAdmin();
+setInterval(actualizarMetricasAdmin, 8000); // cada 8s
+
+// Integración ligera con WebSocket (si existe) para push instantáneo.
+// Si ya tienes ws-replication.js creando la conexión, éste intenta usar la misma
+// conexión global `ws` (si existe). Si no, ignora silenciosamente.
+try {
+  if (window.__ws_replication_socket) {
+    const wsLocal = window.__ws_replication_socket;
+    wsLocal.addEventListener("message", (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        // si el backend envía alguno de estos tipos, refrescamos métricas
+        if (msg.type === "user_count" || msg.type === "pending_updated" || msg.type === "block_mined" || msg.type === "wallet_registered" || msg.type === "venta_registered") {
+          actualizarMetricasAdmin();
+        }
+      } catch (e) {}
+    });
+  }
+} catch {}
+
+
   /* ======================================================
      ARRANQUE
   ====================================================== */
