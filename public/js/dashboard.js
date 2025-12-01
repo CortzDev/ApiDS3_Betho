@@ -367,6 +367,37 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
+/* ============================================================================
+   USUARIOS CONECTADOS
+============================================================================ */
+
+async function revisarUsuariosConectados() {
+  try {
+    const res = await secureFetch("/api/usuarios/conectados");
+    const data = await res.json();
+
+    if (data.ok) {
+      const span = document.getElementById("onlineUsers");
+      span.textContent = data.count;
+
+      if (data.count > 0) {
+        span.classList.remove("bg-secondary");
+        span.classList.add("bg-success");
+      } else {
+        span.classList.remove("bg-success");
+        span.classList.add("bg-secondary");
+      }
+    }
+
+  } catch (err) {
+    console.error("Error consultando usuarios conectados:", err);
+  }
+}
+
+// Ejecutar cada 5 segundos
+setInterval(revisarUsuariosConectados, 5000);
+revisarUsuariosConectados(); // primera ejecución
+
 
   /* ============================================================================
     WALLETS REGISTRADAS

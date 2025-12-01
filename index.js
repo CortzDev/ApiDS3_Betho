@@ -1061,6 +1061,18 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   }
 });
 
+app.get("/api/usuarios/conectados", authRequired, adminOnly, async (req, res) => {
+  try {
+    // EJEMPLO: tabla "usuarios" con campo "online" booleano
+    const r = await db.query(`SELECT COUNT(*) AS total FROM usuarios WHERE online = true`);
+    res.json({ ok: true, count: parseInt(r.rows[0].total) });
+
+  } catch (err) {
+    console.error("Error /usuarios/conectados:", err);
+    res.status(500).json({ ok: false });
+  }
+});
+
 
 // --------------------------- MINAR BLOQUE ---------------------------
 app.post("/api/mine", authRequired, adminOnly, async (req, res) => {
