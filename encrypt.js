@@ -3,17 +3,27 @@ const crypto = require("crypto");
 const ENC_KEY = Buffer.from(process.env.BLOCKS_KEY, "base64");
 const IV_LENGTH = 12;
 
+// =============================================================
+//   AES-256-GCM CORRECTO Y COMPATIBLE CON TU BLOCKCHAIN
+// =============================================================
 function encryptJSON(obj) {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv("aes-256-gcm", ENC_KEY, iv);
-  const text = JSON.stringify(obj);
 
-  let encrypted = cipher.update(text, "utf8", "base64");
-  encrypted += cipher.final("base64");
+  const json = JSON.stringify(obj);
 
-  const tag = cipher.getAuthTag().toString("base64");
+  const encrypted = Buffer.concat([
+    cipher.update(json, "utf8"),
+    cipher.final()
+  ]);
 
-  return { iv: iv.toString("base64"), value: encrypted, tag };
+  const tag = cipher.getAuthTag();
+
+  return {
+    iv: iv.toString("base64"),
+    ciphertext: encrypted.toString("base64"),
+    tag: tag.toString("base64")
+  };
 }
 
 function decryptJSON(enc) {
@@ -25,10 +35,12 @@ function decryptJSON(enc) {
 
   decipher.setAuthTag(Buffer.from(enc.tag, "base64"));
 
-  let decrypted = decipher.update(enc.value, "base64", "utf8");
-  decrypted += decipher.final("utf8");
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(enc.ciphertext, "base64")),
+    decipher.final()
+  ]);
 
-  return JSON.parse(decrypted);
+  return JSON.parse(decrypted.toString("utf8"));
 }
 
 module.exports = { encryptJSON, decryptJSON };

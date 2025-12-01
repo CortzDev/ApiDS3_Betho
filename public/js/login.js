@@ -35,11 +35,11 @@ form.addEventListener("submit", async e => {
 
       // Redirigir según rol
       if (data.usuario.rol === "proveedor") {
-        window.location.href = "/proveedor/dashboard";
+        window.location.href = "/proveedor";
       } else if (data.usuario.rol === "admin") {
         window.location.href = "/dashboard";
       } else if (data.usuario.rol === "usuario") {
-        window.location.href = "/usuario/dashboard";
+        window.location.href = "/usuario";
       } else {
         msg.innerText = "Rol no permitido";
         msg.className = "text-danger";

@@ -1,31 +1,37 @@
+/* =============================================================================
+   DASHBOARD ADMIN – CORREGIDO Y OPTIMIZADO
+   - Verifica token antes de iniciar
+   - Evita fetchs sin token
+   - Evita error: {ok:false,"error":"Ruta no encontrada"}
+   - Compatible con ws-replication.js
+============================================================================= */
+
 document.addEventListener("DOMContentLoaded", () => {
 
-  const pendingDot = document.getElementById("pendingDot");
-  const pendingCount = document.getElementById("pendingCount");
+  /* ======================================================
+     VALIDAR TOKEN AL ENTRAR AL DASHBOARD
+  ====================================================== */
+  const token = localStorage.getItem("token");
+  if (!token) {
+    console.warn("❌ No token found → volver a login");
+    window.location.href = "/login.html";
+    return;
+  }
 
-  /* ============================================================================
-    VALIDACIÓN DEL TOKEN + secureFetch()
-  ============================================================================ */
+  /* ======================================================
+     VALIDACIÓN DEL TOKEN + secureFetch()
+  ====================================================== */
   function getValidToken() {
     const token = localStorage.getItem("token");
 
-    if (!token || token === "undefined" || token === "null") {
-      console.warn("❌ Token no válido");
-      return null;
-    }
+    if (!token) return null;
 
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
       const now = Date.now() / 1000;
-
-      if (payload.exp && payload.exp < now) {
-        console.warn("⛔ Token expirado");
-        return null;
-      }
-
+      if (payload.exp && payload.exp < now) return null;
       return token;
-    } catch (err) {
-      console.warn("❌ Token malformado");
+    } catch {
       return null;
     }
   }
@@ -39,20 +45,17 @@ document.addEventListener("DOMContentLoaded", () => {
       throw new Error("Token inválido o expirado");
     }
 
-    // Asegurar headers
     options.headers = {
       ...(options.headers || {}),
       "Authorization": "Bearer " + token
     };
 
-    // Quitar body en GET
     if ((options.method || "GET").toUpperCase() === "GET") {
       delete options.body;
     }
 
     const response = await fetch(url, options);
 
-    // Si backend responde 401 o 403 → desloguear automáticamente
     if (response.status === 401 || response.status === 403) {
       localStorage.clear();
       window.location.href = "/login.html";
@@ -62,11 +65,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return response;
   }
 
-
-
-  /* ============================================================================
-    ALERTAS
-  ============================================================================ */
+  /* ======================================================
+     ALERTAS
+  ====================================================== */
   function mostrarAlerta(mensaje, tipo = "info") {
     const cont = document.getElementById("alertContainer");
     const id = "alert-" + Date.now();
@@ -84,14 +85,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5000);
   }
 
-
-
-  /* ============================================================================
-    VALIDAR LLAVE PÚBLICA
-  ============================================================================ */
+  /* ======================================================
+     VALIDAR LLAVE PÚBLICA
+  ====================================================== */
   function pemValida(pem) {
     if (!pem) return false;
-    return pem.includes("-----BEGIN PUBLIC KEY-----") 
+    return pem.includes("-----BEGIN PUBLIC KEY-----")
         || pem.includes("-----BEGIN RSA PUBLIC KEY-----");
   }
 
@@ -105,11 +104,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   }
 
-
-
-  /* ============================================================================
-    STRINGIFY CANÓNICO
-  ============================================================================ */
+  /* ======================================================
+     STRINGIFY CANÓNICO
+  ====================================================== */
   function canonicalStringify(obj) {
     if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
     if (Array.isArray(obj)) return "[" + obj.map(canonicalStringify).join(",") + "]";
@@ -117,11 +114,9 @@ document.addEventListener("DOMContentLoaded", () => {
     return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
   }
 
-
-
-  /* ============================================================================
-    DOM
-  ============================================================================ */
+  /* ======================================================
+     DOM ELEMENTOS
+  ====================================================== */
   const proveedoresSection = document.getElementById("proveedoresSection");
   const actividadSection = document.getElementById("actividadSection");
   const walletSection = document.getElementById("walletSection");
@@ -130,33 +125,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const tablaBlockchain = document.getElementById("tablaBlockchain");
   const tablaWallets = document.getElementById("tablaWallets");
 
+  const pendingDot = document.getElementById("pendingDot");
+  const pendingCount = document.getElementById("pendingCount");
 
-
-  /* ============================================================================
-    LOGOUT
-  ============================================================================ */
+  /* ======================================================
+     LOGOUT
+  ====================================================== */
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.clear();
     window.location.href = "/login.html";
   });
 
-
-
-  /* ============================================================================
-    OCULTAR SECCIONES
-  ============================================================================ */
+  /* ======================================================
+     OCULTAR SECCIONES
+  ====================================================== */
   function ocultarTodo() {
     proveedoresSection.style.display = "none";
     actividadSection.style.display = "none";
     walletSection.style.display = "none";
   }
 
-
-
-  /* ============================================================================
-    *** PENDING BLOCKS — Indicador + Alerta ***
-  ============================================================================ */
-
+  /* ======================================================
+     PENDING BLOCKS
+  ====================================================== */
   let alertaPendientesMostrada = false;
 
   async function revisarPendientes() {
@@ -173,33 +164,22 @@ document.addEventListener("DOMContentLoaded", () => {
         pendingCount.textContent = count;
 
         if (!alertaPendientesMostrada) {
-          mostrarAlerta(
-            `Hay ${count} bloque(s) pendiente(s) de minar.`,
-            "warning"
-          );
+          mostrarAlerta(`Hay ${count} bloque(s) pendiente(s) de minar.`, "warning");
           alertaPendientesMostrada = true;
         }
-
       } else {
         pendingDot.style.display = "none";
         pendingCount.textContent = "";
         alertaPendientesMostrada = false;
       }
-
-    } catch (err) {
-      console.error("Error revisando pendientes:", err);
-    }
+    } catch {}
   }
 
-  // Ejecutar cada 6 segundos
   setInterval(revisarPendientes, 6000);
-  revisarPendientes(); // primera ejecución
 
-
-
-  /* ============================================================================
-    PROVEEDORES
-  ============================================================================ */
+  /* ======================================================
+     PROVEEDORES
+  ====================================================== */
   async function cargarProveedores() {
     if (!checkPublicKey()) return;
 
@@ -228,11 +208,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnProveedor").addEventListener("click", cargarProveedores);
 
-
-
-  /* ============================================================================
-    BLOCKCHAIN
-  ============================================================================ */
+  /* ======================================================
+     BLOCKCHAIN — LISTA
+  ====================================================== */
   async function cargarActividad() {
     if (!checkPublicKey()) return;
 
@@ -281,11 +259,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnActividad").addEventListener("click", cargarActividad);
 
-
-
-  /* ============================================================================
-    DETALLE BLOQUE
-  ============================================================================ */
+  /* ======================================================
+     DETALLE DE BLOQUE
+  ====================================================== */
   async function cargarDetalleBloque(id) {
     const res = await secureFetch(`/api/blockchain/${id}`);
     const data = await res.json();
@@ -294,18 +270,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const b = data.bloque;
 
-    document.getElementById("detOperacion").textContent =
-      b.data?.operacion || "Venta";
-
-    document.getElementById("detFecha").textContent =
-      new Date(b.fecha).toLocaleString();
-
+    document.getElementById("detOperacion").textContent = b.data?.operacion || "Venta";
+    document.getElementById("detFecha").textContent = new Date(b.fecha).toLocaleString();
     document.getElementById("detNonce").textContent = b.nonce;
-    document.getElementById("detHashPrev").textContent =
-      b.hash_anterior || "GENESIS";
-
+    document.getElementById("detHashPrev").textContent = b.hash_anterior || "GENESIS";
     document.getElementById("detHashActual").textContent = b.hash_actual;
-    document.getElementById("detHashActual").dataset.blockid = b.id;
 
     const totalVenta =
       b.total_venta ??
@@ -341,11 +310,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ).show();
   }
 
-
-
-  /* ============================================================================
-    MINAR BLOQUE
-  ============================================================================ */
+  /* ======================================================
+     MINAR BLOQUE
+  ====================================================== */
   document.getElementById("btnMine").addEventListener("click", async () => {
     if (!checkPublicKey()) return;
 
@@ -366,46 +333,34 @@ document.addEventListener("DOMContentLoaded", () => {
     revisarPendientes();
   });
 
+  /* ======================================================
+     USUARIOS CONECTADOS
+  ====================================================== */
+  async function revisarUsuariosConectados() {
+    try {
+      const res = await secureFetch("/api/usuarios/conectados");
+      const data = await res.json();
 
-/* ============================================================================
-   USUARIOS CONECTADOS
-============================================================================ */
+      if (data.ok) {
+        const span = document.getElementById("onlineUsers");
+        span.textContent = data.count;
 
-async function revisarUsuariosConectados() {
-  try {
-    const res = await secureFetch("/api/usuarios/conectados");
-    const data = await res.json();
-
-    if (data.ok) {
-      const span = document.getElementById("onlineUsers");
-      span.textContent = data.count;
-
-      if (data.count > 0) {
-        span.classList.remove("bg-secondary");
-        span.classList.add("bg-success");
-      } else {
-        span.classList.remove("bg-success");
-        span.classList.add("bg-secondary");
+        if (data.count > 0) {
+          span.classList.remove("bg-secondary");
+          span.classList.add("bg-success");
+        } else {
+          span.classList.remove("bg-success");
+          span.classList.add("bg-secondary");
+        }
       }
-    }
-
-  } catch (err) {
-    console.error("Error consultando usuarios conectados:", err);
+    } catch {}
   }
-}
 
-setInterval(revisarUsuariosConectados, 5000);
-revisarUsuariosConectados();
+  setInterval(revisarUsuariosConectados, 5000);
 
-
-// Ejecutar cada 5 segundos
-setInterval(revisarUsuariosConectados, 5000);
-revisarUsuariosConectados(); // primera ejecución
-
-
-  /* ============================================================================
-    WALLETS REGISTRADAS
-  ============================================================================ */
+  /* ======================================================
+     WALLETS
+  ====================================================== */
   async function cargarWallets() {
     if (!checkPublicKey()) return;
 
@@ -442,12 +397,11 @@ revisarUsuariosConectados(); // primera ejecución
 
   document.getElementById("btnWallets").addEventListener("click", cargarWallets);
 
-
-
-  /* ============================================================================
-    ARRANQUE
-  ============================================================================ */
+  /* ======================================================
+     ARRANQUE
+  ====================================================== */
   cargarActividad();
   revisarPendientes();
+  revisarUsuariosConectados();
 
 });
