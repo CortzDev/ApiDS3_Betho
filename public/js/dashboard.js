@@ -464,7 +464,7 @@ async function actualizarMetricasAdmin() {
         // Último bloque minado (hash corto)
         if (blocks.length) {
           const last = blocks[blocks.length - 1];
-          const short = (last.hash_actual || "").slice(0, 12);
+          const short = (last.hash_actual || "").slice(0, 9);
           document.getElementById("metricLastBlock").textContent = short || "—";
         } else {
           document.getElementById("metricLastBlock").textContent = "—";

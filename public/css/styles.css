@@ -2,3 +2,29 @@
 
 /* Personalizaciones */
 body { font-family: Arial, sans-serif; }
+
+/* --- Cards de métricas del dashboard --- */
+.metric-card {
+  min-height: 120px;       /* altura uniforme */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+/* tamaño del número destacado */
+.metric-value {
+  font-size: 1.7rem;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* texto superior */
+.metric-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #555;
+}
