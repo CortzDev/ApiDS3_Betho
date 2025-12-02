@@ -48,7 +48,14 @@ const helmetOptions = {
       "style-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://www.gstatic.com"],
       "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
       "img-src": ["'self'", "data:", "blob:", "https://www.gravatar.com"],
-      "connect-src": ["'self'", "http://localhost:3000", "ws://localhost:3000", "https://cdnjs.cloudflare.com", "data:"],
+      "connect-src": [
+        "'self'",
+        "http://localhost:3000",
+        "ws://localhost:3000",
+        "https://cdnjs.cloudflare.com",
+        "https://cdn.jsdelivr.net",
+        "data:"
+      ],
       "font-src": ["'self'", "https://fonts.gstatic.com", "https://cdnjs.cloudflare.com"],
       "frame-src": ["'self'"],
       "object-src": ["'none'"]
@@ -58,6 +65,7 @@ const helmetOptions = {
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: false,
 };
+
 
 // --------------------------- App Express ---------------------------
 const app = express();
