@@ -3,6 +3,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("formRegister");
     const msg = document.getElementById("msg");
 
+    // Detectar entorno automáticamente
+    const API_BASE = window.location.hostname.includes("localhost")
+        ? "http://localhost:3000"
+        : "https://apids3betho-production.up.railway.app";
+
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
@@ -13,27 +18,16 @@ document.addEventListener("DOMContentLoaded", () => {
             rol: document.getElementById("rol").value.trim()
         };
 
-        msg.innerHTML = ""; // limpiar mensaje
+        msg.innerHTML = "";
 
         try {
-            // 🔥 IMPORTANTE → usar HTTP, no HTTPS
-            const res = await fetch("http://localhost:3000/api/register", {
+            const res = await fetch(`${API_BASE}/api/register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data)
             });
 
-            // Si la respuesta NO ES JSON válido (causa del ERR_INVALID_HTTP_RESPONSE)
-            let json;
-            try {
-                json = await res.json();
-            } catch {
-                msg.innerHTML = `
-                    <div class="alert alert-danger">
-                        Respuesta inválida del servidor.
-                    </div>`;
-                return;
-            }
+            let json = await res.json();
 
             if (!res.ok || !json.ok) {
                 msg.innerHTML = `
@@ -60,4 +54,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
 });
-
