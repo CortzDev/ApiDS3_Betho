@@ -32,7 +32,6 @@ form.addEventListener("submit", async e => {
       // Guardar token y rol
       localStorage.setItem("token", data.token);
       localStorage.setItem("rol", data.usuario.rol);
-
       // Redirigir según rol
       if (data.usuario.rol === "proveedor") {
         window.location.href = "/proveedor";

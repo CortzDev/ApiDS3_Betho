@@ -1,8 +1,3 @@
-/**
- * index.js - Integración WebSockets avanzada (Opción B)
- * Compatible 100% con tu backend actual
- */
-
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
@@ -24,11 +19,11 @@ const { encryptJSON, decryptJSON } = require("./encrypt.js");
 // Middlewares
 const { authRequired, adminOnly, proveedorOnly } = require("./public/middlewares/auth.js");
 
-// BASE HTTP => necesario para WebSockets
+// BASE HTTP - lo utiliz websocket
 const http = require("http");
 const WebSocket = require("ws");
 
-// --------------------------- Configs ---------------------------
+// Configs
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -39,7 +34,7 @@ if (!JWT_SECRET) {
 const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "http://localhost:3000")
   .split(",");
 
-// --------------------------- Helmet ---------------------------
+// Helmet 
 const helmetOptions = {
   contentSecurityPolicy: {
     useDefaults: true,
@@ -67,7 +62,7 @@ const helmetOptions = {
 };
 
 
-// --------------------------- App Express ---------------------------
+// App Express 
 const app = express();
 app.set("trust proxy", 1);
 
@@ -81,7 +76,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// --------------------------- CORS ---------------------------
+// CORS 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -94,7 +89,7 @@ app.use(cors({
 app.use(helmet(helmetOptions));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 
-// --------------------------- DB ---------------------------
+// DB 
 const db = new Pool({
   user: process.env.PGUSER || "postgres",
   password: process.env.PGPASSWORD || "12345",
@@ -103,7 +98,7 @@ const db = new Pool({
   port: parseInt(process.env.PGPORT || "5432", 10),
 });
 
-// --------------------------- UTILS ---------------------------
+// UTILS
 function sha256(x) {
   return crypto.createHash("sha256").update(x).digest("hex");
 }
@@ -158,7 +153,7 @@ function validatePublicKeyPem(publicKeyPem) {
   return { ok: false, error: "Formato no reconocido" };
 }
 
-// --------------------------- HASH POW ---------------------------
+// HASH POW - (POW 4)
 const POW_DIFFICULTY = parseInt(process.env.POW_DIFFICULTY || "4", 10);
 
 function computeBlockHash(prevHash, payloadObj, nonce) {
@@ -169,22 +164,17 @@ function isValidProof(hashHex, difficulty) {
   return hashHex.startsWith("0".repeat(difficulty));
 }
 
-// =====================================================================
+
 // 🟣 WEBSOCKET SERVER — SISTEMA DE REPLICACIÓN
-// =====================================================================
-const server = http.createServer(app);   // 🚀 Reemplaza app.listen
+const server = http.createServer(app); 
 
 const wss = new WebSocket.Server({ 
   server,
   path: "/replicacion"
 });
 
-// Lista de clientes WebSocket
 const wsClients = new Set();
 
-/**
- * Broadcast seguro a todos los admins conectados.
- */
 function wsBroadcast(type, payload = {}) {
   const msg = JSON.stringify({ type, payload, ts: Date.now() });
 
@@ -195,9 +185,9 @@ function wsBroadcast(type, payload = {}) {
   }
 }
 
-/**
- * Valida JWT en conexión WebSocket
- */
+
+// Valida JWT con conexión WebSocket
+
 function authenticateWS(token) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
@@ -208,7 +198,7 @@ function authenticateWS(token) {
   }
 }
 
-// --------------------------- WebSocket events ---------------------------
+// WebSocket events
 wss.on("connection", (ws, request) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
   const token = url.searchParams.get("token");
@@ -235,48 +225,33 @@ wss.on("connection", (ws, request) => {
 
 console.log("🟣 WebSocket replicación listo en /replicacion");
 
-// =====================================================================
-// 🔥 Eventos automáticos del backend → Dashboard en tiempo real
-// =====================================================================
-
+//Dashboard en tiempo real
 // Cuando se agrega pending block
 function wsPendingUpdated() {
   wsBroadcast("pending_updated", {});
 }
-
 // Cuando se mina un bloque
 function wsBlockMined(blockInfo) {
   wsBroadcast("block_mined", blockInfo);
 }
-
 // Cuando hay cambios en los usuarios conectados
 function wsUserCount(count) {
   wsBroadcast("user_count", { count });
 }
-
 // Cambios de wallet
 function wsWalletRegistered(wallet) {
   wsBroadcast("wallet_registered", wallet);
 }
-
 // Nueva venta
 function wsVentaRegistered(data) {
   wsBroadcast("venta_registered", data);
 }
-
 // Modificación de stock
 function wsStockChange(info) {
   wsBroadcast("stock_changed", info);
 }
 
-// =====================================================================
-// 🔥 Fin PARTE 1 — Continúa en PARTE 2 (rutas login, ventas, mining, etc.)
-// =====================================================================
-// ===================== PARTE 2/4 =====================
-// Continuación de index.js — funciones de mining, registro y rutas
-// =====================================================
-
-// --------------------------- Mining helpers ---------------------------
+//Mining helpers 
 async function getLastHash() {
   const r = await db.query("SELECT hash_actual FROM blockchain ORDER BY id DESC LIMIT 1");
   return r.rows.length ? r.rows[0].hash_actual : "0".repeat(64);
@@ -364,7 +339,7 @@ async function minePendingBlock(minerName = null, maxAttempts = 5_000_000, pendi
   }
 }
 
-// --------------------------- Registrar Bloques (ventas -> pending) ---------------------------
+// Registrar Bloques (ventas -> pending) 
 async function registrarBloqueVenta(ventaId, usuarioId, total, items, meta = {}) {
   const timestamp = new Date().toISOString();
 
@@ -410,13 +385,13 @@ async function registrarEnPending(operacion, dataObj) {
   }
 }
 
-// --------------------------- Helper: contar usuarios conectados (últimos 5 minutos) ---------------------------
+// Helper: contar usuarios conectados (últimos 2 minutos)
 async function broadcastUserCountFromDB() {
   try {
     const r = await db.query(`
       SELECT COUNT(*) AS total
       FROM usuarios
-      WHERE ultimo_login > NOW() - INTERVAL '5 minutes'
+      WHERE ultimo_login > NOW() - INTERVAL '2 minutes'
     `);
     const count = parseInt(r.rows[0].total || 0, 10);
     wsUserCount(count);
@@ -425,7 +400,7 @@ async function broadcastUserCountFromDB() {
   }
 }
 
-// --------------------------- RUTAS / ENDPOINTS ---------------------------
+// RUTAS / ENDPOINTS
 
 // raíz
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
@@ -585,11 +560,6 @@ app.post("/api/proveedor/productos", authRequired, proveedorOnly, async (req, re
   }
 });
 
-// ... continúa en PARTE 3/4 (más rutas: productos, register, ventas, wallet, pending, blockchain, mine)
-// ===================== PARTE 3/4 =====================
-// Continuación directa — Ventas / Wallet / Blockchain / Pending / Minar
-// ======================================================
-
 // PRODUCTOS DISPONIBLES (público interno)
 app.get("/api/productos", authRequired, async (req, res) => {
   try {
@@ -617,7 +587,7 @@ app.get("/api/todos-productos", authRequired, adminOnly, async (req, res) => {
   }
 });
 
-// --------------------------- REGISTRO DE USUARIO ---------------------------
+// REGISTRO DE USUARIO
 app.post("/api/register", async (req, res) => {
   try {
     const { nombre, email, password, rol } = req.body;
@@ -657,7 +627,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// --------------------------- VENTA CON FIRMA RSA ---------------------------
+//VENTA CON FIRMA RSA
 app.post("/api/usuario/venta", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { productos, signature, public_key_pem, key_filename, nonce } =
@@ -886,7 +856,7 @@ app.post("/api/usuario/venta", authRequired, async (req, res) => {
   }
 });
 
-// --------------------------- WALLET REGISTER ---------------------------
+// WALLET REGISTER
 app.post("/api/wallet/register", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { public_key_pem, pin } = req.body;
@@ -940,7 +910,7 @@ app.post("/api/wallet/register", authRequired, async (req, res) => {
   }
 });
 
-// --------------------------- VENTA CON PIN ---------------------------
+// VENTA CON PIN 
 app.post("/api/usuario/venta-pin", authRequired, async (req, res) => {
   const usuarioId = req.user.id;
   const { productos, pin } = req.body;
@@ -1012,7 +982,7 @@ app.post("/api/usuario/venta-pin", authRequired, async (req, res) => {
   }
 });
 
-// --------------------------- INVOICE (Paquete cifrado) ---------------------------
+// INVOICE (Paquete cifrado)
 async function createEncryptedInvoicePackage(ventaId, usuarioId) {
   const rVenta = await db.query(
     `SELECT v.id, v.usuario_id, v.fecha, v.total, u.nombre AS usuario_nombre, u.email
@@ -1135,7 +1105,7 @@ app.post("/api/usuario/invoice-generate", authRequired, async (req, res) => {
   }
 });
 
-// --------------------------- WALLET ME ---------------------------
+// WALLET ME
 app.get("/api/wallet/me", authRequired, async (req, res) => {
   try {
     const usuarioId = req.user.id;
@@ -1157,7 +1127,7 @@ app.get("/api/wallet/me", authRequired, async (req, res) => {
   }
 });
 
-// --------------------------- LISTAR WALLETS (Admin) ---------------------------
+// LISTAR WALLETS (Admin)
 app.get("/api/wallets/registered", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -1181,7 +1151,7 @@ app.get("/api/wallets/registered", authRequired, adminOnly, async (req, res) => 
   }
 });
 
-// --------------------------- PENDING BLOCKS ---------------------------
+// PENDING BLOCKS 
 app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -1196,7 +1166,7 @@ app.get("/api/pending-blocks", authRequired, adminOnly, async (req, res) => {
   }
 });
 
-// --------------------------- USUARIOS CONECTADOS ---------------------------
+// USUARIOS CONECTADOS
 app.get("/api/usuarios/conectados", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -1213,7 +1183,7 @@ app.get("/api/usuarios/conectados", authRequired, adminOnly, async (req, res) =>
   }
 });
 
-// --------------------------- MINAR BLOQUE ---------------------------
+// MINAR BLOQUE
 app.post("/api/mine", authRequired, adminOnly, async (req, res) => {
   try {
     const { miner_name } = req.body || {};
@@ -1285,7 +1255,7 @@ function isEncryptedBlock(data) {
 
 
 
-// --------------------------- BLOCKCHAIN LECTURA ---------------------------
+// BLOCKCHAIN LECTURA
 app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`
@@ -1344,7 +1314,7 @@ app.get("/api/blockchain", authRequired, adminOnly, async (req, res) => {
 
 
 
-// --------------------------- DETALLE BLOQUE ---------------------------
+// DETALLE BLOQUE
 app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) return res.json({ ok: false, error: "ID inválido" });
@@ -1385,7 +1355,7 @@ app.get("/api/blockchain/:id", authRequired, adminOnly, async (req, res) => {
 });
 
 
-// --------------------------- VALIDAR CADENA COMPLETA ---------------------------
+// VALIDAR CADENA COMPLETA 
 app.get("/api/blockchain/validate", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`SELECT * FROM blockchain ORDER BY id ASC`);
@@ -1436,7 +1406,7 @@ app.get("/api/blockchain/validate", authRequired, adminOnly, async (req, res) =>
 });
 
 
-// --------------------------- VALIDAR BLOQUE INDIVIDUAL ---------------------------
+// VALIDAR BLOQUE INDIVIDUAL 
 app.get("/api/blockchain/validate-one/:id", authRequired, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1481,7 +1451,7 @@ app.get("/api/blockchain/validate-one/:id", authRequired, adminOnly, async (req,
 });
 
 
-// --------------------------- AUDITORÍA COMPLETA ---------------------------
+// AUDITORÍA COMPLETA 
 app.get("/api/blockchain/full-audit", authRequired, adminOnly, async (req, res) => {
   try {
     const r = await db.query(`SELECT * FROM blockchain ORDER BY id ASC`);
@@ -1528,9 +1498,6 @@ app.get("/api/blockchain/full-audit", authRequired, adminOnly, async (req, res) 
   }
 });
 
-// ===================== PARTE 4/4 =====================
-// -------------- Inicialización BD + Rutas estáticas
-// =====================================================
 
 async function initDB() {
   try {
@@ -1561,19 +1528,19 @@ app.get("/proveedor", (req, res) => {
 
 
 
-// ---------------- SERVIR FRONTEND ----------------
+// SERVIR FRONTEND 
 app.use("/", express.static(path.join(__dirname, "public")));
 app.use("/css", express.static(path.join(__dirname, "public/css")));
 app.use("/js", express.static(path.join(__dirname, "public/js")));
 app.use("/assets", express.static(path.join(__dirname, "public/assets")));
 
 
-// -------------- FALLBACK 404 ----------------------
+// FALLBACK 404 
 app.use((req, res) => {
   res.status(404).json({ ok: false, error: "Ruta no encontrada" });
 });
 
-// -------------- ARRANQUE DEL SERVIDOR --------------
+// ARRANQUE DEL SERVIDOR 
 server.listen(PORT, () => {
   console.log(`🚀 Servidor backend activo en http://localhost:${PORT}`);
   console.log("🌐 WebSocket replicación listo en /replicacion");

@@ -11,7 +11,6 @@ const nombreInput = document.getElementById("nombreRol");
 const msg = document.getElementById("msg");
 const btnDashboard = document.getElementById("btnDashboard");
 
-// -------------------- Funciones CRUD --------------------
 async function cargarRoles() {
   const res = await fetch("/roles", {
     headers: { "Authorization": "Bearer " + token }
@@ -75,7 +74,6 @@ window.eliminar = async (id) => {
   cargarRoles();
 };
 
-// -------------------- Botón Dashboard seguro según rol --------------------
 btnDashboard.addEventListener("click", async () => {
   try {
     const res = await fetch("/api/perfil", {

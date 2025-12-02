@@ -3,9 +3,6 @@ const crypto = require("crypto");
 const ENC_KEY = Buffer.from(process.env.BLOCKS_KEY, "base64");
 const IV_LENGTH = 12;
 
-// =============================================================
-//   AES-256-GCM CORRECTO Y COMPATIBLE CON TU BLOCKCHAIN
-// =============================================================
 function encryptJSON(obj) {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv("aes-256-gcm", ENC_KEY, iv);

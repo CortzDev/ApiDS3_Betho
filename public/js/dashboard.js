@@ -1,16 +1,6 @@
-/* =============================================================================
-   DASHBOARD ADMIN – CORREGIDO Y OPTIMIZADO
-   - Verifica token antes de iniciar
-   - Evita fetchs sin token
-   - Evita error: {ok:false,"error":"Ruta no encontrada"}
-   - Compatible con ws-replication.js
-============================================================================= */
-
 document.addEventListener("DOMContentLoaded", () => {
 
-  /* ======================================================
-     VALIDAR TOKEN AL ENTRAR AL DASHBOARD
-  ====================================================== */
+
   const token = localStorage.getItem("token");
   if (!token) {
     console.warn("❌ No token found → volver a login");
@@ -18,9 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  /* ======================================================
-     VALIDACIÓN DEL TOKEN + secureFetch()
-  ====================================================== */
+//validacion de token
   function getValidToken() {
     const token = localStorage.getItem("token");
 
@@ -65,9 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return response;
   }
 
-  /* ======================================================
-     ALERTAS
-  ====================================================== */
+//notificaciones
   function mostrarAlerta(mensaje, tipo = "info") {
     const cont = document.getElementById("alertContainer");
     const id = "alert-" + Date.now();
@@ -84,10 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (a) bootstrap.Alert.getOrCreateInstance(a).close();
     }, 5000);
   }
-
-  /* ======================================================
-     VALIDAR LLAVE PÚBLICA
-  ====================================================== */
+  //validar llave publica del admin
   function pemValida(pem) {
     if (!pem) return false;
     return pem.includes("-----BEGIN PUBLIC KEY-----")
@@ -104,9 +87,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return true;
   }
 
-  /* ======================================================
-     STRINGIFY CANÓNICO
-  ====================================================== */
   function canonicalStringify(obj) {
     if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
     if (Array.isArray(obj)) return "[" + obj.map(canonicalStringify).join(",") + "]";
@@ -114,9 +94,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return "{" + keys.map(k => JSON.stringify(k) + ":" + canonicalStringify(obj[k])).join(",") + "}";
   }
 
-  /* ======================================================
-     DOM ELEMENTOS
-  ====================================================== */
   const proveedoresSection = document.getElementById("proveedoresSection");
   const actividadSection = document.getElementById("actividadSection");
   const walletSection = document.getElementById("walletSection");
@@ -128,26 +105,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const pendingDot = document.getElementById("pendingDot");
   const pendingCount = document.getElementById("pendingCount");
 
-  /* ======================================================
-     LOGOUT
-  ====================================================== */
+//cerrar sesión
   document.getElementById("logoutBtn").addEventListener("click", () => {
     localStorage.clear();
     window.location.href = "/login.html";
   });
 
-  /* ======================================================
-     OCULTAR SECCIONES
-  ====================================================== */
   function ocultarTodo() {
     proveedoresSection.style.display = "none";
     actividadSection.style.display = "none";
     walletSection.style.display = "none";
   }
 
-  /* ======================================================
-     PENDING BLOCKS
-  ====================================================== */
   let alertaPendientesMostrada = false;
 
   async function revisarPendientes() {
@@ -177,9 +146,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setInterval(revisarPendientes, 6000);
 
-  /* ======================================================
-     PROVEEDORES
-  ====================================================== */
   async function cargarProveedores() {
     if (!checkPublicKey()) return;
 
@@ -208,9 +174,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnProveedor").addEventListener("click", cargarProveedores);
 
-  /* ======================================================
-     BLOCKCHAIN — LISTA
-  ====================================================== */
   async function cargarActividad() {
     if (!checkPublicKey()) return;
 
@@ -259,9 +222,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btnActividad").addEventListener("click", cargarActividad);
 
-  /* ======================================================
-     DETALLE DE BLOQUE
-  ====================================================== */
   async function cargarDetalleBloque(id) {
     const res = await secureFetch(`/api/blockchain/${id}`);
     const data = await res.json();
@@ -310,9 +270,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ).show();
   }
 
-  /* ======================================================
-     MINAR BLOQUE
-  ====================================================== */
   document.getElementById("btnMine").addEventListener("click", async () => {
     if (!checkPublicKey()) return;
 
@@ -333,9 +290,6 @@ document.addEventListener("DOMContentLoaded", () => {
     revisarPendientes();
   });
 
-  /* ======================================================
-     USUARIOS CONECTADOS
-  ====================================================== */
   async function revisarUsuariosConectados() {
     try {
       const res = await secureFetch("/api/usuarios/conectados");
@@ -358,9 +312,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setInterval(revisarUsuariosConectados, 5000);
 
-  /* ======================================================
-     WALLETS
-  ====================================================== */
   async function cargarWallets() {
     if (!checkPublicKey()) return;
 
@@ -393,38 +344,29 @@ document.addEventListener("DOMContentLoaded", () => {
       tablaWallets.appendChild(tr);
     });
   }
-
   document.getElementById("btnWallets").addEventListener("click", cargarWallets);
-
-
-/* =========================
-   METRICS WIDGETS (Admin)
-   ========================= */
 
 async function actualizarMetricasAdmin() {
   try {
-    // Usuarios conectados (endpoint existente)
+    // Usuarios conectados
     try {
       const rUsers = await secureFetch("/api/usuarios/conectados");
       const dUsers = await rUsers.json();
       if (dUsers.ok) {
         document.getElementById("metricOnlineUsers").textContent = dUsers.count ?? 0;
-        // también actualiza el badge lateral por coherencia
         const span = document.getElementById("onlineUsers");
         if (span) span.textContent = dUsers.count ?? 0;
       }
     } catch (e) {
       console.warn("No se pudo obtener usuarios conectados:", e);
     }
-
-    // Pending blocks
+    // bloques pendientes
     try {
       const rPend = await secureFetch("/api/pending-blocks");
       const dPend = await rPend.json();
       if (dPend.ok) {
         const count = Array.isArray(dPend.pending) ? dPend.pending.length : 0;
         document.getElementById("metricPendingBlocks").textContent = count;
-        // también actualiza ícono lateral
         const dot = document.getElementById("pendingDot");
         const cnt = document.getElementById("pendingCount");
         if (dot && cnt) {
@@ -442,7 +384,6 @@ async function actualizarMetricasAdmin() {
     } catch (e) {
       console.warn("No se pudo obtener pending-blocks:", e);
     }
-
     // Wallets registradas
     try {
       const rW = await secureFetch("/api/wallets/registered");
@@ -453,14 +394,12 @@ async function actualizarMetricasAdmin() {
     } catch (e) {
       console.warn("No se pudo obtener wallets registradas:", e);
     }
-
-    // Blockchain — para ventas hoy, último bloque y tiempo promedio minado
+    // Blockchain —  último bloque y tiempo promedio minado
     try {
       const rChain = await secureFetch("/api/blockchain");
       const dChain = await rChain.json();
       if (dChain.ok && Array.isArray(dChain.cadena)) {
         const blocks = dChain.cadena;
-
         // Último bloque minado (hash corto)
         if (blocks.length) {
           const last = blocks[blocks.length - 1];
@@ -469,8 +408,7 @@ async function actualizarMetricasAdmin() {
         } else {
           document.getElementById("metricLastBlock").textContent = "—";
         }
-
-        // Ventas hoy (contar bloques con operacion 'venta' con fecha hoy)
+        // Ventas hoy
         const today = new Date();
         const y = today.getFullYear(), m = today.getMonth(), d = today.getDate();
         const ventasHoy = blocks.reduce((acc, b) => {
@@ -484,9 +422,7 @@ async function actualizarMetricasAdmin() {
           return acc;
         }, 0);
         document.getElementById("metricSalesToday").textContent = ventasHoy;
-
-        // Tiempo promedio de minado (promedio diff entre bloques consecutivos)
-        // Usamos últimos N blocks (si hay menos, tomamos todos)
+        // Tiempo promedio de minado
         const N = Math.min(30, blocks.length);
         if (N >= 2) {
           const recent = blocks.slice(-N);
@@ -511,21 +447,15 @@ async function actualizarMetricasAdmin() {
     console.error("Error actualizando métricas admin:", err);
   }
 }
-
-// Lanza la actualización periódica y una inmediata
 actualizarMetricasAdmin();
 setInterval(actualizarMetricasAdmin, 8000); // cada 8s
-
-// Integración ligera con WebSocket (si existe) para push instantáneo.
-// Si ya tienes ws-replication.js creando la conexión, éste intenta usar la misma
-// conexión global `ws` (si existe). Si no, ignora silenciosamente.
+// conexión global `ws` 
 try {
   if (window.__ws_replication_socket) {
     const wsLocal = window.__ws_replication_socket;
     wsLocal.addEventListener("message", (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        // si el backend envía alguno de estos tipos, refrescamos métricas
         if (msg.type === "user_count" || msg.type === "pending_updated" || msg.type === "block_mined" || msg.type === "wallet_registered" || msg.type === "venta_registered") {
           actualizarMetricasAdmin();
         }
@@ -534,10 +464,6 @@ try {
   }
 } catch {}
 
-
-  /* ======================================================
-     ARRANQUE
-  ====================================================== */
   cargarActividad();
   revisarPendientes();
   revisarUsuariosConectados();

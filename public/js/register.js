@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("formRegister");
     const msg = document.getElementById("msg");
 
-    // Detectar entorno automáticamente
     const API_BASE = window.location.hostname.includes("localhost")
         ? "http://localhost:3000"
         : "https://apids3betho-production.up.railway.app";

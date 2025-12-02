@@ -1,7 +1,3 @@
-// =========================
-//   proveedor.js
-// =========================
-
 // Token y rol
 const token = localStorage.getItem("token");
 const rol = localStorage.getItem("rol");
@@ -26,18 +22,14 @@ const btnLogout = document.getElementById("btnLogout");
 let editando = false;
 let idEditando = null;
 
-// =========================
-// Cerrar sesión
-// =========================
+//cerrar sesión
 btnLogout.addEventListener("click", () => {
   localStorage.removeItem("token");
   localStorage.removeItem("rol");
   window.location.href = "/login.html";
 });
 
-// =========================
-// CARGAR CATEGORÍAS
-// =========================
+//cargar categorías
 async function cargarCategorias() {
   try {
     const res = await fetch("/api/categorias", {
@@ -62,9 +54,6 @@ async function cargarCategorias() {
   }
 }
 
-// =========================
-// ACTIVAR MODO EDICIÓN
-// =========================
 function activarModoEdicion(producto) {
   editando = true;
   idEditando = producto.id;
@@ -74,16 +63,13 @@ function activarModoEdicion(producto) {
   precio.value = producto.precio;
   stock.value = producto.stock;
 
-  // ✔ ahora funciona porque el backend devuelve categoria_id
   categoria.value = producto.categoria_id;
 
   msg.innerHTML = `<b>Editando producto ID ${producto.id}</b>`;
   msg.className = "text-primary";
 }
 
-// =========================
-// ELIMINAR PRODUCTO
-// =========================
+//eliminar producto
 async function eliminarProducto(id) {
   if (!confirm("¿Seguro de eliminar este producto?")) return;
 
@@ -105,9 +91,7 @@ async function eliminarProducto(id) {
   }
 }
 
-// =========================
-// LISTAR PRODUCTOS
-// =========================
+//listar productos
 async function cargarProductos() {
   try {
     const res = await fetch("/api/proveedor/productos", {
@@ -158,9 +142,7 @@ async function cargarProductos() {
   }
 }
 
-// =========================
-// AGREGAR / EDITAR PRODUCTO
-// =========================
+//agregar/editar producto
 form.addEventListener("submit", async e => {
   e.preventDefault();
 
@@ -214,9 +196,7 @@ form.addEventListener("submit", async e => {
   }
 });
 
-// =========================
-// INICIALIZAR
-// =========================
+//inicializar
 cargarCategorias();
 cargarProductos();
 
